@@ -46,8 +46,9 @@ export NATS_REDEPLOY=${NATS_REDEPLOY:-""}
 ########################################################################################################################
 
 # Constants
-TMP_FOLDER="./tmp"
-NATS_MANIFESTS_PATH="manifests/nats"
+CONTROLLER_FOLDER=${CONTROLLER_FOLDER}
+TMP_FOLDER="${CONTROLLER_FOLDER}/tmp"
+NATS_MANIFESTS_PATH="${CONTROLLER_FOLDER}/manifests/nats"
 
 # Create a tmp folder for files modified during the deployment
 TMP_MANIFESTS_FOLDER="${TMP_FOLDER}/${NATS_NAMESPACE}/manifests"

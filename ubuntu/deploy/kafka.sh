@@ -32,8 +32,9 @@ export KFK_REDEPLOY=${KFK_REDEPLOY:-""}
 ########################################################################################################################
 
     # Constants
-    TMP_FOLDER="./tmp"
-    KFK_MANIFESTS_PATH="manifests/kafka"
+    CONTROLLER_FOLDER=${CONTROLLER_FOLDER}
+    TMP_FOLDER="${CONTROLLER_FOLDER}/tmp"
+    KFK_MANIFESTS_PATH="${CONTROLLER_FOLDER}/manifests/kafka"
     KFK_ZOOKEEPER_MANIFEST="01-zookeeper.yaml"
     KFK_MANIFEST="02-kafka.yaml"
 

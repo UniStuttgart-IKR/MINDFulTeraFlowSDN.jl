@@ -16,6 +16,9 @@
 
 # ----- TeraFlowSDN ------------------------------------------------------------
 
+# Set the path to the controller folder
+export CONTROLLER_FOLDER="/home/kshpthk/controller"
+
 # Set the URL of the internal MicroK8s Docker registry where the images will be uploaded to.
 export TFS_REGISTRY_IMAGES="http://localhost:32000/tfs/"
 
@@ -97,13 +100,13 @@ export TFS_IMAGE_TAG="dev"
 export TFS_K8S_NAMESPACE="tfs"
 
 # Set additional manifest files to be applied after the deployment
-export TFS_EXTRA_MANIFESTS="manifests/nginx_ingress_http.yaml"
+export TFS_EXTRA_MANIFESTS="${CONTROLLER_FOLDER}/manifests/nginx_ingress_http.yaml"
 
 # Uncomment to monitor performance of components
-#export TFS_EXTRA_MANIFESTS="${TFS_EXTRA_MANIFESTS} manifests/servicemonitors.yaml"
+#export TFS_EXTRA_MANIFESTS="${TFS_EXTRA_MANIFESTS} ${CONTROLLER_FOLDER}/manifests/servicemonitors.yaml"
 
 # Uncomment when deploying Optical CyberSecurity
-#export TFS_EXTRA_MANIFESTS="${TFS_EXTRA_MANIFESTS} manifests/cachingservice.yaml"
+#export TFS_EXTRA_MANIFESTS="${TFS_EXTRA_MANIFESTS} ${CONTROLLER_FOLDER}/manifests/cachingservice.yaml"
 
 # Set the new Grafana admin password
 export TFS_GRAFANA_PASSWORD="admin123+"

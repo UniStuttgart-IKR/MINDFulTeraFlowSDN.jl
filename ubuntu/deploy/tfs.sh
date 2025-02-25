@@ -129,7 +129,8 @@ export KFK_REDEPLOY=${KFK_REDEPLOY:-""}
 
 # Constants
 GITLAB_REPO_URL="labs.etsi.org:5050/tfs/controller"
-TMP_FOLDER="./tmp"
+CONTROLLER_FOLDER=${CONTROLLER_FOLDER}
+TMP_FOLDER="${CONTROLLER_FOLDER}/tmp"
 
 # Create a tmp folder for files modified during the deployment
 TMP_MANIFESTS_FOLDER="${TMP_FOLDER}/${TFS_K8S_NAMESPACE}/manifests"
@@ -204,9 +205,9 @@ if [[ " ${TFS_COMPONENTS[@]} " =~ " dlt " ]]; then
 fi
 
 echo "Deploying components and collecting environment variables..."
-ENV_VARS_SCRIPT=tfs_runtime_env_vars.sh
+ENV_VARS_SCRIPT=$CONTROLLER_FOLDER/tfs_runtime_env_vars.sh
 echo "# Environment variables for TeraFlowSDN deployment" > $ENV_VARS_SCRIPT
-PYTHONPATH=$(pwd)/src
+PYTHONPATH=$CONTROLLER_FOLDER/src
 echo "export PYTHONPATH=${PYTHONPATH}" >> $ENV_VARS_SCRIPT
 
 echo "Create Redis secret..."
@@ -234,7 +235,7 @@ if [[ $DOCKER_MAJOR_VERSION -ge 23 ]]; then
 fi
 
 LINKERD_STATUS="$(microk8s status -a linkerd)"
-if [[ $linkerd_status =~ "enabled" ]]; then
+if [[ $LINKERD_STATUS =~ "enabled" ]]; then
     echo "LinkerD installed: workloads will be injected"
 else
     echo "LinkerD not installed"
@@ -249,26 +250,26 @@ for COMPONENT in $TFS_COMPONENTS; do
         BUILD_LOG="$TMP_LOGS_FOLDER/build_${COMPONENT}.log"
 
         if [ "$COMPONENT" == "ztp" ] || [ "$COMPONENT" == "policy" ]; then
-            $DOCKER_BUILD -t "$COMPONENT:$TFS_IMAGE_TAG" -f ./src/"$COMPONENT"/Dockerfile ./src/"$COMPONENT"/ > "$BUILD_LOG"
+            $DOCKER_BUILD -t "$COMPONENT:$TFS_IMAGE_TAG" -f ${CONTROLLER_FOLDER}/src/"$COMPONENT"/Dockerfile ${CONTROLLER_FOLDER} > "$BUILD_LOG"
         elif [ "$COMPONENT" == "pathcomp" ] || [ "$COMPONENT" == "telemetry" ] || [ "$COMPONENT" == "analytics" ]; then
             BUILD_LOG="$TMP_LOGS_FOLDER/build_${COMPONENT}-frontend.log"
-            $DOCKER_BUILD -t "$COMPONENT-frontend:$TFS_IMAGE_TAG" -f ./src/"$COMPONENT"/frontend/Dockerfile . > "$BUILD_LOG"
+            $DOCKER_BUILD -t "$COMPONENT-frontend:$TFS_IMAGE_TAG" -f ${CONTROLLER_FOLDER}/src/"$COMPONENT"/frontend/Dockerfile ${CONTROLLER_FOLDER} > "$BUILD_LOG"
 
             BUILD_LOG="$TMP_LOGS_FOLDER/build_${COMPONENT}-backend.log"
-            $DOCKER_BUILD -t "$COMPONENT-backend:$TFS_IMAGE_TAG" -f ./src/"$COMPONENT"/backend/Dockerfile . > "$BUILD_LOG"
+            $DOCKER_BUILD -t "$COMPONENT-backend:$TFS_IMAGE_TAG" -f ${CONTROLLER_FOLDER}/src/"$COMPONENT"/backend/Dockerfile ${CONTROLLER_FOLDER} > "$BUILD_LOG"
             if [ "$COMPONENT" == "pathcomp" ]; then
                 # next command is redundant, but helpful to keep cache updated between rebuilds
                 IMAGE_NAME="$COMPONENT-backend:$TFS_IMAGE_TAG-builder"
-                $DOCKER_BUILD -t "$IMAGE_NAME" --target builder -f ./src/"$COMPONENT"/backend/Dockerfile . >> "$BUILD_LOG"
+                $DOCKER_BUILD -t "$IMAGE_NAME" --target builder -f ${CONTROLLER_FOLDER}/src/"$COMPONENT"/backend/Dockerfile ${CONTROLLER_FOLDER} >> "$BUILD_LOG"
             fi
         elif [ "$COMPONENT" == "dlt" ]; then
             BUILD_LOG="$TMP_LOGS_FOLDER/build_${COMPONENT}-connector.log"
-            $DOCKER_BUILD -t "$COMPONENT-connector:$TFS_IMAGE_TAG" -f ./src/"$COMPONENT"/connector/Dockerfile . > "$BUILD_LOG"
+            $DOCKER_BUILD -t "$COMPONENT-connector:$TFS_IMAGE_TAG" -f ${CONTROLLER_FOLDER}/src/"$COMPONENT"/connector/Dockerfile ${CONTROLLER_FOLDER} > "$BUILD_LOG"
 
             BUILD_LOG="$TMP_LOGS_FOLDER/build_${COMPONENT}-gateway.log"
-            $DOCKER_BUILD -t "$COMPONENT-gateway:$TFS_IMAGE_TAG" -f ./src/"$COMPONENT"/gateway/Dockerfile . > "$BUILD_LOG"
+            $DOCKER_BUILD -t "$COMPONENT-gateway:$TFS_IMAGE_TAG" -f ${CONTROLLER_FOLDER}/src/"$COMPONENT"/gateway/Dockerfile ${CONTROLLER_FOLDER} > "$BUILD_LOG"
         else
-            $DOCKER_BUILD -t "$COMPONENT:$TFS_IMAGE_TAG" -f ./src/"$COMPONENT"/Dockerfile . > "$BUILD_LOG"
+            $DOCKER_BUILD -t "$COMPONENT:$TFS_IMAGE_TAG" -f ${CONTROLLER_FOLDER}/src/"$COMPONENT"/Dockerfile ${CONTROLLER_FOLDER} > "$BUILD_LOG"
         fi
 
         echo "  Pushing Docker image to '$TFS_REGISTRY_IMAGES'..."
@@ -319,9 +320,9 @@ for COMPONENT in $TFS_COMPONENTS; do
     echo "  Adapting '$COMPONENT' manifest file..."
     MANIFEST="$TMP_MANIFESTS_FOLDER/${COMPONENT}service.yaml"
     if [[ $linkerd_status =~ "enabled" ]]; then
-        cat ./manifests/"${COMPONENT}"service.yaml | linkerd inject - --proxy-cpu-request "10m" --proxy-cpu-limit "1" --proxy-memory-request "64Mi" --proxy-memory-limit "256Mi" > "$MANIFEST"
+        cat ${CONTROLLER_FOLDER}/manifests/"${COMPONENT}"service.yaml | linkerd inject - --proxy-cpu-request "10m" --proxy-cpu-limit "1" --proxy-memory-request "64Mi" --proxy-memory-limit "256Mi" > "$MANIFEST"
     else
-        cp ./manifests/"${COMPONENT}"service.yaml "$MANIFEST"
+        cp ${CONTROLLER_FOLDER}/manifests/"${COMPONENT}"service.yaml "$MANIFEST"
     fi
 
     if [ "$COMPONENT" == "pathcomp" ] || [ "$COMPONENT" == "telemetry" ] || [ "$COMPONENT" == "analytics" ]; then
@@ -553,7 +554,7 @@ if [[ "$TFS_COMPONENTS" == *"monitoring"* ]] && [[ "$TFS_COMPONENTS" == *"webui"
     # Ref: https://grafana.com/docs/grafana/latest/http_api/dashboard/
 
     # Dashboard: L3 Monitoring KPIs
-    curl -X POST -H "Content-Type: application/json" -d '@src/webui/grafana_db_mon_kpis_psql.json' \
+    curl -X POST -H "Content-Type: application/json" -d @"${CONTROLLER_FOLDER}/src/webui/grafana_db_mon_kpis_psql.json" \
         ${GRAFANA_URL_UPDATED}/api/dashboards/db
     echo
     DASHBOARD_URL="${GRAFANA_URL_UPDATED}/api/dashboards/uid/tfs-l3-monit"
@@ -562,7 +563,7 @@ if [[ "$TFS_COMPONENTS" == *"monitoring"* ]] && [[ "$TFS_COMPONENTS" == *"webui"
     echo
 
     # Dashboard: Slice Grouping
-    curl -X POST -H "Content-Type: application/json" -d '@src/webui/grafana_db_slc_grps_psql.json' \
+    curl -X POST -H "Content-Type: application/json" -d @"${CONTROLLER_FOLDER}/src/webui/grafana_db_slc_grps_psql.json" \
         ${GRAFANA_URL_UPDATED}/api/dashboards/db
     echo
     DASHBOARD_URL="${GRAFANA_URL_UPDATED}/api/dashboards/uid/tfs-slice-grps"
@@ -571,7 +572,7 @@ if [[ "$TFS_COMPONENTS" == *"monitoring"* ]] && [[ "$TFS_COMPONENTS" == *"webui"
     echo
 
     # Dashboard: Component RPCs
-    curl -X POST -H "Content-Type: application/json" -d '@src/webui/grafana_prom_component_rpc.json' \
+    curl -X POST -H "Content-Type: application/json" -d @"${CONTROLLER_FOLDER}/src/webui/grafana_prom_component_rpc.json" \
         ${GRAFANA_URL_UPDATED}/api/dashboards/db
     echo
     DASHBOARD_URL="${GRAFANA_URL_UPDATED}/api/dashboards/uid/tfs-comp-rpc"
@@ -580,7 +581,7 @@ if [[ "$TFS_COMPONENTS" == *"monitoring"* ]] && [[ "$TFS_COMPONENTS" == *"webui"
     echo
 
     # Dashboard: Device Drivers
-    curl -X POST -H "Content-Type: application/json" -d '@src/webui/grafana_prom_device_driver.json' \
+    curl -X POST -H "Content-Type: application/json" -d @"${CONTROLLER_FOLDER}/src/webui/grafana_prom_device_driver.json" \
         ${GRAFANA_URL_UPDATED}/api/dashboards/db
     echo
     DASHBOARD_URL="${GRAFANA_URL_UPDATED}/api/dashboards/uid/tfs-dev-drv"
@@ -589,7 +590,7 @@ if [[ "$TFS_COMPONENTS" == *"monitoring"* ]] && [[ "$TFS_COMPONENTS" == *"webui"
     echo
 
     # Dashboard: Service Handlers
-    curl -X POST -H "Content-Type: application/json" -d '@src/webui/grafana_prom_service_handler.json' \
+    curl -X POST -H "Content-Type: application/json" -d @"${CONTROLLER_FOLDER}/src/webui/grafana_prom_service_handler.json" \
         ${GRAFANA_URL_UPDATED}/api/dashboards/db
     echo
     DASHBOARD_URL="${GRAFANA_URL_UPDATED}/api/dashboards/uid/tfs-svc-hdlr"
@@ -598,7 +599,7 @@ if [[ "$TFS_COMPONENTS" == *"monitoring"* ]] && [[ "$TFS_COMPONENTS" == *"webui"
     echo
 
     # Dashboard: Device Execution Details
-    curl -X POST -H "Content-Type: application/json" -d '@src/webui/grafana_prom_device_exec_details.json' \
+    curl -X POST -H "Content-Type: application/json" -d @"${CONTROLLER_FOLDER}/src/webui/grafana_prom_device_exec_details.json" \
         ${GRAFANA_URL_UPDATED}/api/dashboards/db
     echo
     DASHBOARD_URL="${GRAFANA_URL_UPDATED}/api/dashboards/uid/tfs-dev-exec"
@@ -607,7 +608,7 @@ if [[ "$TFS_COMPONENTS" == *"monitoring"* ]] && [[ "$TFS_COMPONENTS" == *"webui"
     echo
 
     # Dashboard: Load Generator Status
-    curl -X POST -H "Content-Type: application/json" -d '@src/webui/grafana_prom_load_generator.json' \
+    curl -X POST -H "Content-Type: application/json" -d @"${CONTROLLER_FOLDER}/src/webui/grafana_prom_load_generator.json" \
         ${GRAFANA_URL_UPDATED}/api/dashboards/db
     echo
     DASHBOARD_URL="${GRAFANA_URL_UPDATED}/api/dashboards/uid/tfs-loadgen-stats"
@@ -616,7 +617,7 @@ if [[ "$TFS_COMPONENTS" == *"monitoring"* ]] && [[ "$TFS_COMPONENTS" == *"webui"
     echo
 
     # Dashboard: Load Generator Status
-    curl -X POST -H "Content-Type: application/json" -d '@src/webui/grafana_prom_tfs_num_pods.json' \
+    curl -X POST -H "Content-Type: application/json" -d @"${CONTROLLER_FOLDER}/src/webui/grafana_prom_tfs_num_pods.json" \
         ${GRAFANA_URL_UPDATED}/api/dashboards/db
     echo
     DASHBOARD_URL="${GRAFANA_URL_UPDATED}/api/dashboards/uid/tfs-num-pods"

@@ -61,8 +61,9 @@ export CRDB_REDEPLOY=${CRDB_REDEPLOY:-""}
 ########################################################################################################################
 
 # Constants
-TMP_FOLDER="./tmp"
-CRDB_MANIFESTS_PATH="manifests/cockroachdb"
+CONTROLLER_FOLDER=${CONTROLLER_FOLDER}
+TMP_FOLDER="${CONTROLLER_FOLDER}/tmp"
+CRDB_MANIFESTS_PATH="${CONTROLLER_FOLDER}/manifests/cockroachdb"
 
 # Create a tmp folder for files modified during the deployment
 TMP_MANIFESTS_FOLDER="${TMP_FOLDER}/${CRDB_NAMESPACE}/manifests"

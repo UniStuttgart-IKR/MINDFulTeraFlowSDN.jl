@@ -60,8 +60,9 @@ export QDB_REDEPLOY=${QDB_REDEPLOY:-""}
 ########################################################################################################################
 
 # Constants
-TMP_FOLDER="./tmp"
-QDB_MANIFESTS_PATH="manifests/questdb"
+CONTROLLER_FOLDER=${CONTROLLER_FOLDER}
+TMP_FOLDER="${CONTROLLER_FOLDER}/tmp"
+QDB_MANIFESTS_PATH="${CONTROLLER_FOLDER}/manifests/questdb"
 
 # Create a tmp folder for files modified during the deployment
 TMP_MANIFESTS_FOLDER="${TMP_FOLDER}/${QDB_NAMESPACE}/manifests"
