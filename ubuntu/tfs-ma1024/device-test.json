@@ -1,37 +1,148 @@
 {
+    "contexts": [
+        {
+            "context_id": {
+                "context_uuid": {
+                    "uuid": "admin"
+                }
+            }
+        }
+    ],
+    "topologies": [
+        {
+            "topology_id": {
+                "context_id": {
+                    "context_uuid": {
+                        "uuid": "admin"
+                    }
+                },
+                "topology_uuid": {
+                    "uuid": "admin"
+                }
+            }
+        }
+    ],
     "devices": [
         {
-            "device_id": {"device_uuid": {"uuid": "R1"}},
-            "device_type": "packet-router",
-            "device_config": {"config_rules": [
-                {"action": 1, "custom": {"resource_key": "_connect/address", "resource_value": "10.0.2.15"}},
-                {"action": 1, "custom": {"resource_key": "_connect/port", "resource_value": "8301"}}
-            ]},
+            "device_id": { 
+                "device_uuid": { 
+                    "uuid": "R1" 
+                } 
+            },
+            "device_type": "emu-packet-router",
+            "device_config": {
+                "config_rules": [
+                    {
+                        "action": 1,
+                        "custom": { 
+                            "resource_key": "_connect/address", 
+                            "resource_value": "10.0.2.15" }
+                    },
+                    {
+                        "action": 1,
+                        "custom": { 
+                            "resource_key": "_connect/port", 
+                            "resource_value": "8301" }
+                    },
+                    {
+                        "action": 1,
+                        "custom": {
+                            "resource_key": "_connect/settings",
+                            "resource_value": {
+                                "endpoints": [
+                                    {"sample_types": [], "type": "optical", "uuid": "EP1"}
+                                ]
+                            }
+                        }
+                    }
+                ]
+            },
             "device_operational_status": 1,
-            "device_drivers": [1],
+            "device_drivers": [0],
             "device_endpoints": []
         },
         {
-            "device_id": {"device_uuid": {"uuid": "R2"}},
-            "device_type": "packet-router",
-            "device_config": {"config_rules": [
-                {"action": 1, "custom": {"resource_key": "_connect/address", "resource_value": "10.0.2.15"}},
-                {"action": 1, "custom": {"resource_key": "_connect/port", "resource_value": "8302"}}
-            ]},
+            "device_id": { "device_uuid": { "uuid": "R2" } },
+            "device_type": "emu-packet-router",
+            "device_config": {
+                "config_rules": [
+                    {
+                        "action": 1,
+                        "custom": { "resource_key": "_connect/address", "resource_value": "10.0.2.15" }
+                    },
+                    {
+                        "action": 1,
+                        "custom": { "resource_key": "_connect/port", "resource_value": "8302" }
+                    },
+                    {
+                        "action": 1,
+                        "custom": {
+                            "resource_key": "_connect/settings",
+                            "resource_value": {
+                                "endpoints": [
+                                    {"sample_types": [], "type": "optical", "uuid": "EP1"}
+                                ]
+                            }
+                        }
+                    }
+                ]
+            },
             "device_operational_status": 1,
-            "device_drivers": [1],
+            "device_drivers": [0],
             "device_endpoints": []
         },
         {
-            "device_id": {"device_uuid": {"uuid": "R3"}},
-            "device_type": "packet-router",
-            "device_config": {"config_rules": [
-                {"action": 1, "custom": {"resource_key": "_connect/address", "resource_value": "10.0.2.15"}},
-                {"action": 1, "custom": {"resource_key": "_connect/port", "resource_value": "8303"}}
-            ]},
+            "device_id": { "device_uuid": { "uuid": "R3" } },
+            "device_type": "emu-packet-router",
+            "device_config": {
+                "config_rules": [
+                {
+                    "action": 1,
+                    "custom": { "resource_key": "_connect/address", "resource_value": "10.0.2.15" }
+                },
+                {
+                    "action": 1,
+                    "custom": { "resource_key": "_connect/port", "resource_value": "8303" }
+                },
+                {
+                    "action": 1,
+                    "custom": {
+                        "resource_key": "_connect/settings",
+                        "resource_value": {
+                            "endpoints": [
+                                {"sample_types": [], "type": "optical", "uuid": "EP1"}
+                            ]
+                        }
+                    }
+                }
+                ]
+            },
             "device_operational_status": 1,
-            "device_drivers": [1],
+            "device_drivers": [0],
             "device_endpoints": []
+        }
+    ],
+    "links": [
+        {
+            "link_id": {"link_uuid": {"uuid": "R1-EP1==R2-EP1"}}, 
+            "link_endpoint_ids": [
+                {"device_id": {"device_uuid": {"uuid": "R1"}}, "endpoint_uuid": {"uuid": "EP1"}},
+                {"device_id": {"device_uuid": {"uuid": "R2"}}, "endpoint_uuid": {"uuid": "EP1"}}
+            ]
+        },
+        {
+            "link_id": {"link_uuid": {"uuid": "R2-EP1==R3-EP1"}}, 
+            "link_endpoint_ids": [
+                {"device_id": {"device_uuid": {"uuid": "R2"}}, "endpoint_uuid": {"uuid": "EP1"}},
+                {"device_id": {"device_uuid": {"uuid": "R3"}}, "endpoint_uuid": {"uuid": "EP1"}}
+            ]
+        },
+        {
+            "link_id": {"link_uuid": {"uuid": "R1-EP1==R3-EP1"}}, 
+            "link_endpoint_ids": [
+                {"device_id": {"device_uuid": {"uuid": "R1"}}, "endpoint_uuid": {"uuid": "EP1"}},
+                {"device_id": {"device_uuid": {"uuid": "R3"}}, "endpoint_uuid": {"uuid": "EP1"}}
+            ]
         }
     ]
 }
