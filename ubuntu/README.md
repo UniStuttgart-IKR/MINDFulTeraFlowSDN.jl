@@ -1,286 +1,97 @@
-This is the TeraFlowSDN (TFS) Controller - an open-source cloud native SDN (Software-Defined Networking) controller developed by the ETSI Software Development Group TeraFlowSDN.
+# TeraFlowSDN Installation Guide
 
-## Core Components and Architecture
+This guide provides step-by-step instructions for installing and deploying TeraFlowSDN in your environment.
 
-TeraFlowSDN is built as a microservices-based system with the following key components:
+## Prerequisites
 
-1. **Core Services**:
-   - Context service - Manages network contexts and topologies
-   - Device service - Handles network device management
-   - Service service - Orchestrates network services
-   - PathComp service - Performs path computation
-   - Slice service - Manages network slicing
-   - DLT service - Distributed Ledger Technology integration using Hyperledger Fabric
+Before starting the installation process, please ensure you have the following:
 
-2. **Advanced Components**:
-   - ZTP (Zero Touch Provisioning) - Java-based service for device automation
-   - Policy - Policy enforcement component
-   - Analytics - Network analytics and monitoring
-   - Optical controller - Management of optical networks
-   - BGP-LS speaker - For network topology discovery
+- Ubuntu 20.04 LTS or newer
+- At least 8GB of RAM
+- At least 20GB of free disk space
+- An internet connection
 
-3. **Security Components**:
-   - Optical attack detector/mitigator - Security monitoring and response
-   - ACL management - Access control lists
+## Installation Process
 
+### 1. Initial Setup
 
-## Explanation from Code Analysis
+Please follow the official TeraFlowSDN deployment guide at https://tfs.etsi.org/documentation/v4.0.0/deployment_guide/ until the section "Prepare a deployment script with the deployment settings" in "1.3. Deploy TeraFlowSDN".
 
-Looking at the test code (particularly in Objects_DC_CSGW_OLS.py), I can see that:
+This includes:
+- Installing MicroK8s
+- Setting up prerequisites
+- Cloning the TeraFlowSDN repository
 
-1. For emulated devices, endpoints are defined via `json_device_emulated_connect_rules()`
-2. The Device component infers endpoints from these connect rules
-3. The config variable `ADD_CONNECT_RULES_TO_DEVICES` controls whether endpoints are added via config rules or directly
+### 2. Custom Deployment Script Setup
 
-This explains why your current approach isn't working - the TFS controller expects emulated device endpoints to be defined in the config rules, not directly in the device_endpoints section.
+**Important:** Our deployment process has slight modifications from the official guide.
 
-akshay-pathak: this worked perfectly, can you generate documentation for all the config rules for all types of devices? bcs i am unable to understand using just context.proto, take all src files into consideration and write a detailed documentation for config rules for all types of devices as per devicetypes.py in src common and all the proto files
-basically i want a extremely detailed documentation where i need to know how exactly the json descriptor files are made and what to do for different devices
+1. First, clone the official TeraFlowSDN controller repository into a certain folder:
+   ```bash
+   git clone https://labs.etsi.org/rep/tfs/controller.git
+   ```
 
-GitHub Copilot: # TeraFlowSDN Configuration Guide: Device Descriptors and Config Rules
+2. Take note of the path of this folder where you cloned the repository, as you'll need to reference the `controller` folder in it in our deployment script.
 
-This documentation provides a comprehensive reference for creating device descriptors in TeraFlowSDN, including detailed explanation of configuration rules for different device types.
+3. In the `my_deploy.sh` script provided in this repository, update the `CONTROLLER_FOLDER` variable to point to your controller folder path:
+   ```bash
+   export CONTROLLER_FOLDER="/home/kshpthk/controller"  # Change this to your actual path
+   ```
 
-## Table of Contents
+#### About the Deployment Script
 
-1. JSON Descriptor Structure
-2. Device Types
-3. Config Rules Mechanism
-4. Endpoint Configuration
-5. Link Configuration
-6. Device-Specific Configuration
-7. Complete Examples
+Our `my_deploy.sh` script as well as the scripts in our `deploy` folder are based on the official example but include some improvements:
 
-## JSON Descriptor Structure
+- Updated service configurations to work with newer versions of some components such as prometheus/observability
+- Modifications to ensure reproducibility
 
-All TeraFlowSDN descriptors follow this basic structure:
+The script settings are organized in 4 main sections:
 
-```json
-{
-    "contexts": [
-        {"context_id": {"context_uuid": {"uuid": "admin"}}}
-    ],
-    "topologies": [
-        {"topology_id": {"context_id": {"context_uuid": {"uuid": "admin"}}, "topology_uuid": {"uuid": "admin"}}}
-    ],
-    "devices": [
-        // Device definitions
-    ],
-    "links": [
-        // Link definitions
-    ]
-}
+1. **TeraFlowSDN Section**:
+   - `CONTROLLER_FOLDER`: Points to the location of your cloned TeraFlowSDN controller repository. This is critical as it's used throughout the deployment for locating manifests, building images, and referencing deployment scripts.
+   - `TFS_REGISTRY_IMAGE`: Specifies the private Docker registry to be used (default uses the Docker repository enabled in MicroK8s)
+   - `TFS_COMPONENTS`: Lists components whose Docker images will be rebuilt, uploaded to the registry, and deployed in Kubernetes
+   - `TFS_IMAGE_TAG`: Defines the tag for Docker images being rebuilt and uploaded
+   - `TFS_K8S_NAMESPACE`: Specifies the Kubernetes namespace for deploying TFS components
+   - `TFS_EXTRA_MANIFESTS`: Provides additional manifests to apply to Kubernetes (e.g., ingress controllers, service monitors)
+   - `TFS_GRAFANA_PASSWORD`: Sets the password for the Grafana admin user
+   - `TFS_SKIP_BUILD`: When set to YES, prevents rebuilding Docker images (redeploys existing images)
+
+2. **CockroachDB Section**: Configures the deployment of the backend CockroachDB database
+   - Settings include namespace, external ports, credentials, and deployment mode
+
+3. **NATS Section**: Configures the deployment of the backend NATS message broker
+   - Settings include namespace, external ports, and deployment mode
+
+4. **K8s Observability**: Configures ports for Prometheus and Grafana
+
+5. **QuestDB Section**: Configures the deployment of the backend QuestDB timeseries database
+   - Settings include namespace, external ports, credentials, and table names
+
+6. **Apache Kafka**: Configuration for Kafka deployment
+
+Review the script and uncomment any additional components you want to deploy based on your needs. For extended descriptions of all settings, check the scripts in the deploy folder.
+
+### 3. Continue with Deployment
+
+Make sure our customized `my_deploy` script is executable:
+
+```bash
+chmod +x my_deploy.sh
 ```
 
-## Device Types
-
-TeraFlowSDN supports numerous device types defined in DeviceTypes.py:
-
-### Emulated Devices
-- `emu-packet-router`: Emulated packet router
-- `emu-datacenter`: Emulated data center
-- `emu-optical-roadm`: Emulated optical ROADM
-- `emu-ip-sdn-controller`: Emulated IP SDN controller
-- `emu-optical-transponder`: Emulated optical transponder
-- `emu-optical-amplifier`: Emulated optical amplifier
-- `emu-open-line-system`: Emulated open line system
-- `emu-microwave-radio-system`: Emulated microwave radio
-
-### Physical Devices
-- `packet-router`: Physical packet router
-- `datacenter`: Physical datacenter
-- `optical-roadm`: Physical optical ROADM
-- `ip-sdn-controller`: Physical IP SDN controller
-- `optical-transponder`: Physical optical transponder
-- `optical-amplifier`: Physical optical amplifier
-- `open-line-system`: Physical open line system
-- `microwave-radio-system`: Physical microwave radio
-
-## Config Rules Mechanism
-
-Config rules in TeraFlowSDN follow this structure:
-
-```json
-{
-    "action": 1,  // 1=SET, 2=UNSET, 3=CREATE, 4=DELETE
-    "custom": {
-        "resource_key": "key_path",
-        "resource_value": "value"
-    }
-}
-```
-
-The `resource_key` specifies the configuration parameter, and `resource_value` can be a string, number, boolean, or complex object (serialized as JSON).
-
-### Special Config Rule Categories
-
-1. **Connection Rules**: Prefixed with `_connect/`
-   - Used for initial device connection parameters
-   - Processed during device addition
-
-2. **Configuration Rules**: Without `_connect/` prefix
-   - Used for device functionality configuration
-   - Applied after device is added
-
-## Endpoint Configuration
-
-### Emulated Device Endpoint Configuration
-
-For emulated devices, endpoints must be defined through the `_connect/settings` config rule:
-
-```json
-{
-    "action": 1,
-    "custom": {
-        "resource_key": "_connect/settings",
-        "resource_value": {
-            "endpoints": [
-                {"sample_types": [], "type": "optical", "uuid": "EP1"},
-                {"sample_types": [], "type": "copper", "uuid": "EP2"}
-            ]
-        }
-    }
-}
-```
-
-Endpoint types include:
-- `optical`: For optical connections
-- `copper`: For electrical/copper connections
-- `copper/internal`: For internal interfaces
-- `copper/external`: For external interfaces
-
-## Link Configuration
-
-Links connect endpoints from different devices:
-
-```json
-{
-    "link_id": {"link_uuid": {"uuid": "DEVICE1-EP1==DEVICE2-EP1"}},
-    "link_endpoint_ids": [
-        {"device_id": {"device_uuid": {"uuid": "DEVICE1"}}, "endpoint_uuid": {"uuid": "EP1"}},
-        {"device_id": {"device_uuid": {"uuid": "DEVICE2"}}, "endpoint_uuid": {"uuid": "EP1"}}
-    ]
-}
-```
-
-## Device-Specific Configuration
-
-### Emulated Packet Router (emu-packet-router)
-
-```json
-{
-    "device_id": {"device_uuid": {"uuid": "R1"}},
-    "device_type": "emu-packet-router",
-    "device_drivers": [0],
-    "device_endpoints": [],
-    "device_operational_status": 1,
-    "device_config": {
-        "config_rules": [
-            {
-                "action": 1,
-                "custom": {"resource_key": "_connect/address", "resource_value": "127.0.0.1"}
-            },
-            {
-                "action": 1,
-                "custom": {"resource_key": "_connect/port", "resource_value": "8301"}
-            },
-            {
-                "action": 1,
-                "custom": {
-                    "resource_key": "_connect/settings",
-                    "resource_value": {
-                        "endpoints": [
-                            {"sample_types": [], "type": "copper", "uuid": "port1"},
-                            {"sample_types": [], "type": "copper", "uuid": "port2"}
-                        ]
-                    }
-                }
-            }
-        ]
-    }
-}
-```
-
-### Emulated Optical ROADM (emu-optical-roadm) 
-ADD MORE HERE- INCOMPLETE
-
-```json
-{
-    "device_id": {"device_uuid": {"uuid": "ROADM1"}},
-    "device_type": "emu-optical-roadm",
-    "device_drivers": [0],
-    "device_endpoints": [],
-    "device_operational_status": 1,
-    "device_config": {
-        "config_rules": [
-            {
-                "action": 1,
-                "custom": {"resource_key": "_connect/address", "resource_value": "127.0.0.1"}
-            },
-            {
-                "action": 1,
-                "custom": {"resource_key": "_connect/port", "resource_value": "8302"}
-            },
-            {
-                "action": 1,
-                "custom": {
-                    "resource_key": "_connect/settings", 
-                    "resource_value": {
-                        "endpoints": [
-                            {"sample_types": [], "type": "optical", "uuid": "port1"},
-                            {"sample_types": [], "type": "optical", "uuid": "port2"},
-                            {"sample_types": [], "type": "optical", "uuid": "port3"}
-                        ]
-                    }
-                }
-            }
-        ]
-    }
-}
-```
-
-### Emulated Optical Transponder (emu-optical-transponder)
-ADD MORE HERE- INCOMPLETE
-```json
-{
-    "device_id": {"device_uuid": {"uuid": "TRANSPONDER1"}},
-    "device_type": "emu-optical-transponder",
-    "device_drivers": [0],
-    "device_endpoints": [],
-    "device_operational_status": 1,
-    "device_config": {
-        "config_rules": [
-            {
-                "action": 1,
-                "custom": {"resource_key": "_connect/address", "resource_value": "127.0.0.1"}
-            },
-            {
-                "action": 1,
-                "custom": {"resource_key": "_connect/port", "resource_value": "8303"}
-            },
-            {
-                "action": 1,
-                "custom": {
-                    "resource_key": "_connect/settings",
-                    "resource_value": {
-                        "endpoints": [
-                            {"sample_types": [], "type": "copper", "uuid": "client"},
-                            {"sample_types": [], "type": "optical", "uuid": "line"}
-                        ]
-                    }
-                }
-            }
-        ]
-    }
-}
-```
+After setting up the deployment script, continue following the official guide from the "Confirm that MicroK8s is running" section in "1.3. Deploy TeraFlowSDN" at https://tfs.etsi.org/documentation/latest/deployment_guide/.
 
 
-## Complete Examples
 
-### Example 1: 
-#### A three node network with each node consisting of an emu-packet-router, emu-optical-transponder and emu-optical-roadm
+## Troubleshooting
 
-URL
+If you encounter any issues during deployment:
 
-This documentation should help you create effective device descriptors for TeraFlowSDN. For more specific details about individual device drivers or configuration parameters, please refer to the TeraFlowSDN source code.
+1. Check MicroK8s status: `microk8s status`
+2. View pod status: `microk8s kubectl get pods -A`
+3. Check logs for failing pods: `microk8s kubectl logs <pod-name> -n <namespace>`
+
+## Additional Information
+
+For more detailed information about TeraFlowSDN configuration options, please refer to the official documentation.
