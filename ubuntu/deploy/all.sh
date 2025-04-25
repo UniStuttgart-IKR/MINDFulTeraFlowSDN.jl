@@ -224,4 +224,7 @@ export GRAF_EXT_PORT_HTTP=${GRAF_EXT_PORT_HTTP:-"3000"}
 # Show deploy summary
 ./deploy/show.sh
 
+# Development mode with Devspace
+./deploy/devspace.sh
+
 echo "Done!"

@@ -71,7 +71,56 @@
 						{"sample_types": [], "type": "copper", "uuid": "1/4"},
 						{"sample_types": [], "type": "copper", "uuid": "1/5"},
 						{"sample_types": [], "type": "copper", "uuid": "1/6"}
-					]}}}
+					]}}},
+					{"action": 1, "custom": {"resource_key": "/network_instance[R1-NetInst]", "resource_value": {
+						"name": "R1-NetInst", "description": "R1 Network Instance", "type": "L3VRF",
+						"route_distinguisher": "0:0"
+					}}},
+					{"action": 1, "custom": {"resource_key": "/interface[eth0]", "resource_value": {
+						"name": "eth0", "description": "Ethernet Interface", "mtu": 1500
+					}}},
+					{"action": 1, "custom": {"resource_key": "/interface[eth0]/subinterface[0]", "resource_value": {
+						"name": "eth0", "index": 0, "description": "Subinterface 0", "vlan_id": 100,
+						"address_ip": "192.168.1.1", "address_prefix": 24
+					}}},
+					{"action": 1, "custom": {"resource_key": "/network_instance[R1-NetInst]/interface[eth0.100]", "resource_value": {
+						"name": "R1-NetInst", "id": "eth0.100", "interface": "eth0", "subinterface": 0
+					}}},
+					{"action": 1, "custom": {"resource_key": "/network_instance[R1-NetInst]/protocols[BGP]", "resource_value": {
+						"name": "R1-NetInst", "identifier": "BGP", "protocol_name": "BGP", "as": 65000
+					}}},
+					{"action": 1, "custom": {"resource_key": "/routing_policy/bgp_defined_set[R1_rt_import]", "resource_value": {
+						"ext_community_set_name": "R1_rt_import"
+					}}},
+					{"action": 1, "custom": {"resource_key": "/routing_policy/bgp_defined_set[R1_rt_import][route-target:65000:333]", "resource_value": {
+						"ext_community_set_name": "R1_rt_import", "ext_community_member": "route-target:65000:333"
+					}}},
+					{"action": 1, "custom": {"resource_key": "/routing_policy/policy_definition[R1_import]", "resource_value": {
+						"policy_name": "R1_import"
+					}}},
+					{"action": 1, "custom": {"resource_key": "/routing_policy/policy_definition[R1_import]/statement[3]", "resource_value": {
+						"policy_name": "R1_import", "statement_name": "3", "ext_community_set_name": "R1_rt_import",
+						"match_set_options": "ANY", "policy_result": "ACCEPT_ROUTE"
+					}}},
+					{"action": 1, "custom": {"resource_key": "/network_instance[R1-NetInst]/inter_instance_policies[R1_import]", "resource_value": {
+						"name": "R1-NetInst", "import_policy": "R1_import"
+					}}},
+					{"action": 1, "custom": {"resource_key": "/routing_policy/bgp_defined_set[R1_rt_export]", "resource_value": {
+						"ext_community_set_name": "R1_rt_export"
+					}}},
+					{"action": 1, "custom": {"resource_key": "/routing_policy/bgp_defined_set[R1_rt_export][route-target:65000:333]", "resource_value": {
+						"ext_community_set_name": "R1_rt_export", "ext_community_member": "route-target:65000:333"
+					}}},
+					{"action": 1, "custom": {"resource_key": "/routing_policy/policy_definition[R1_export]", "resource_value": {
+						"policy_name": "R1_export"
+					}}},
+					{"action": 1, "custom": {"resource_key": "/routing_policy/policy_definition[R1_export]/statement[3]", "resource_value": {
+						"policy_name": "R1_export", "statement_name": "3", "ext_community_set_name": "R1_rt_export",
+						"match_set_options": "ANY", "policy_result": "ACCEPT_ROUTE"
+					}}},
+					{"action": 1, "custom": {"resource_key": "/network_instance[R1-NetInst]/inter_instance_policies[R1_export]", "resource_value": {
+						"name": "R1-NetInst", "export_policy": "R1_export"
+					}}}
 				]
 			}
 		},

@@ -25,6 +25,9 @@ export TFS_REGISTRY_IMAGES="http://localhost:32000/tfs/"
 # Set the list of components, separated by spaces, you want to build images for, and deploy.
 export TFS_COMPONENTS="context device pathcomp service slice nbi webui monitoring"
 
+export TFS_DEV_MODE=""
+export DEVSPACE_CONFIG="/home/kshpthk/ma1024/ubuntu/devspace.yaml"
+
 # Uncomment to activate Monitoring (old)
 #export TFS_COMPONENTS="${TFS_COMPONENTS} monitoring"
 
