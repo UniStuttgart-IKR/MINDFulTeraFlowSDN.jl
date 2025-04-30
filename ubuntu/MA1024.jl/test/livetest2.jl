@@ -20,19 +20,20 @@ ag1 = first(domains_name_graph)[2]
 ############
 # Topology and devices known
 ibnag1 = MINDF.default_IBNAttributeGraph(ag1)
-sdn = MA1024.TFSSDN("http://...", ibndag1)
+# sdn = MA1024.TFSSDN("http://...", ibndag1)
 # Obvi needs some MINDFul TFS property mapping
 # Teraflow needs to be set up or be able to be set up with the next function call
-ibnf1 = MINDF.IBNFramework(ibnag1,sdn::TFSSDN)
+# ibnf1 = MINDF.IBNFramework(ibnag1,sdn::TFSSDN)
+ibnf1 = MINDF.IBNFramework(ibnag1)
 ###########
 # TFS devices need to be available
-conintent1 = MINDF.ConnectivityIntent(MINDF.GlobalNode(MINDF.getibnfid(ibnf1), 4), MINDF.GlobalNode(MINDF.getibnfid(ibnf1), 8), u"100Gbps")
-MINDF.addintent!(ibnf1, conintent1, MINDF.NetworkOperator())
+# conintent1 = MINDF.ConnectivityIntent(MINDF.GlobalNode(MINDF.getibnfid(ibnf1), 4), MINDF.GlobalNode(MINDF.getibnfid(ibnf1), 8), u"100Gbps")
+# MINDF.addintent!(ibnf1, conintent1, MINDF.NetworkOperator())
 
 # plot
-# MINDFM.ibngraphplot(ibnag1; layout = x -> MINDFM.coordlayout(ibnag1), nlabels=repr.(Graphs.vertices(ibnag1)))
+MINDFM.ibngraphplot(ibnag1; layout = x -> MINDFM.coordlayout(ibnag1), nlabels=repr.(Graphs.vertices(ibnag1)))
 # MINDFM.intentplot(ibnf1, UUID(1); showstate=true)
 
-MINDF.compileintent!(ibnf1, UUID(1), MINDF.KShorestPathFirstFitCompilation(10))
+# MINDF.compileintent!(ibnf1, UUID(1), MINDF.KShorestPathFirstFitCompilation(10))
 
 # nothing
