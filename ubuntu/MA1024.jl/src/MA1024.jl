@@ -1,12 +1,12 @@
 module MA1024
-using HTTP, JSON3, StructTypes, Oxygen
-export JSON3  
+using ProtoBuf, JSON3, StructTypes, Oxygen, HTTP
+include("api/api.jl")          # <- pulls every file above
 
-include("api/api.jl")
+using ProtoBuf: OneOf          # bring it into MA1024’s scope   
 
-# choose what to export publicly
-export DevicePayload, DeviceConfig, ConfigRule, CustomRule, 
-        CONFIGACTION_SET, CONFIGACTION_DELETE, CONFIGACTION_UNSPECIFIED,
+# public surface --------------------------------------------------------------
+export OneOf, Ctx,
         get_devices, get_device, put_device,
-        print_device, start, stop
+        print_device,
+        start, stop               # from Server.jl
 end
