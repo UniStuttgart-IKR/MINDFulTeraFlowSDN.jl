@@ -7,6 +7,6 @@ using ProtoBuf: OneOf          # bring it into MA1024’s scope
 # public surface --------------------------------------------------------------
 export OneOf, Ctx,
         get_devices, get_device, put_device,
-        print_device,
+        print_device, add_config_rule!,
         start, stop               # from Server.jl
 end
