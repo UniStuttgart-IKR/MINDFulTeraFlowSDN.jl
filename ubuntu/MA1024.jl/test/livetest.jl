@@ -8,43 +8,43 @@ print_device(dev)
 rule_netinst = Ctx.ConfigRule(
     Ctx.ConfigActionEnum.CONFIGACTION_SET,
     OneOf(:custom,
-          Ctx.ConfigRule_Custom(
-              "/network_instance[R1-NetInst]",
-              JSON3.write(Dict(
-                  "description"        => "R1 Network Instance",
-                  "name"               => "R1-NetInst",
-                  "route_distinguisher"=> "0:0",
-                  "type"               => "L3VRF"
-              )))
+            Ctx.ConfigRule_Custom(
+                "/network_instance[R1-NetInst]",
+                JSON3.write(Dict(
+                    "description"        => "R1 Network Instance",
+                    "name"               => "R1-NetInst",
+                    "route_distinguisher"=> "0:0",
+                    "type"               => "L3VRF"
+                )))
 ))
 
 # --- rule 2 : /interface[eth0] ---------------------------------------
 rule_if_eth0 = Ctx.ConfigRule(
     Ctx.ConfigActionEnum.CONFIGACTION_SET,
     OneOf(:custom,
-          Ctx.ConfigRule_Custom(
-              "/interface[eth0]",
-              JSON3.write(Dict(
-                  "description" => "Ethernet Interface",
-                  "mtu"         => 1500,
-                  "name"        => "eth0"
-              )))
+            Ctx.ConfigRule_Custom(
+                "/interface[eth0]",
+                JSON3.write(Dict(
+                    "description" => "Ethernet Interface",
+                    "mtu"         => 1500,
+                    "name"        => "eth0"
+                )))
 ))
 
 # --- rule 3 : /interface[eth0]/subinterface[0] -----------------------
 rule_subif = Ctx.ConfigRule(
     Ctx.ConfigActionEnum.CONFIGACTION_SET,
     OneOf(:custom,
-          Ctx.ConfigRule_Custom(
-              "/interface[eth0]/subinterface[0]",
-              JSON3.write(Dict(
-                  "address_ip"     => "192.168.1.1",
-                  "address_prefix" => 24,
-                  "description"    => "Subinterface 0",
-                  "index"          => 0,
-                  "name"           => "eth0",
-                  "vlan_id"        => 100
-              )))
+            Ctx.ConfigRule_Custom(
+                "/interface[eth0]/subinterface[0]",
+                JSON3.write(Dict(
+                    "address_ip"     => "192.168.1.1",
+                    "address_prefix" => 24,
+                    "description"    => "Subinterface 0",
+                    "index"          => 0,
+                    "name"           => "eth0",
+                    "vlan_id"        => 100
+                )))
 ))
 
 # --- send all three rules in a single PUT ----------------------------

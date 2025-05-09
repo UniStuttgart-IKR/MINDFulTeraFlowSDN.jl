@@ -32,7 +32,7 @@ function print_device(dev::Ctx.Device)
         elseif hasproperty(r, :resource_key)
             tag   = :custom
             value = (resource_key = getproperty(r, :resource_key),
-                     resource_value = getproperty(r, :resource_value))
+                    resource_value = getproperty(r, :resource_value))
         else
             println("  [", r.action, "]  (no sub‑field set)")
             continue
@@ -65,7 +65,7 @@ function print_device(dev::Ctx.Device)
             println("  • ", c.component_uuid.uuid,
                     "  ", c.type, "  name=\"", c.name, "\"")
             !isempty(c.attributes) &&
-              println("      attrs: ", join(keys(c.attributes), ", "))
+                println("      attrs: ", join(keys(c.attributes), ", "))
             !isempty(c.parent) && println("      parent: ", c.parent)
         end
     end
@@ -73,7 +73,7 @@ function print_device(dev::Ctx.Device)
     # ---------------- Controller ------------------------------------------
     cid = dev.controller_id
     if cid !== nothing && cid.device_uuid !== nothing &&
-       !isempty(cid.device_uuid.uuid)
+        !isempty(cid.device_uuid.uuid)
         println("\nController Node    : ", cid.device_uuid.uuid)
     end
     println("────────────────────────────────────────────")
