@@ -2,7 +2,7 @@
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "e5f8aeabdeb602f068afc64043b775f5aa7e9a5f"
+project_hash = "b9f98cb63acd6096fd99a89977392c95a815620d"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -937,7 +937,7 @@ uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 version = "1.1.0"
 
 [[deps.MA1024]]
-deps = ["DocStringExtensions", "HTTP", "JSON3", "MINDFul", "Oxygen", "ProtoBuf", "StructTypes"]
+deps = ["DocStringExtensions", "HTTP", "JSON3", "MINDFul", "Oxygen", "ProtoBuf", "StructTypes", "UUIDs"]
 path = ".."
 uuid = "46f56d62-3109-4457-b1c0-8de8f04d0914"
 version = "0.1.0"

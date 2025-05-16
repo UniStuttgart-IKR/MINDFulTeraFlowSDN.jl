@@ -11,6 +11,7 @@ MINDFul = "437ce7a4-cd80-4539-9a29-b274cfe157d6"
 Oxygen = "df9a0d86-3283-4920-82dc-4555fc0d1d8b"
 ProtoBuf = "3349acd9-ac6a-5e09-bcdb-63829b23a429"
 StructTypes = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
+UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
 [compat]
 DocStringExtensions = "0.9.3"
@@ -20,3 +21,4 @@ MINDFul = "0.3.0"
 Oxygen = "1.7.1"
 ProtoBuf = "1.1.1"
 StructTypes = "1.11.0"
+UUIDs = "1.11.0"
