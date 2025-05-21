@@ -3,7 +3,7 @@
         {
             "context_id": {
                 "context_uuid": {
-                    "uuid": "admin3"
+                    "uuid": "admin"
                 }
             }
         }
@@ -13,12 +13,37 @@
             "topology_id": {
                 "context_id": {
                     "context_uuid": {
-                        "uuid": "admin3"
+                        "uuid": "admin"
                     }
                 },
                 "topology_uuid": {
-                    "uuid": "topo3"
+                    "uuid": "admin"
                 }
+            },
+            "device_ids": [
+                {
+                    "device_uuid": {
+                        "uuid": "test-router"
+                    }
+                }
+            ]
+        }
+    ],
+    "devices": [
+        {
+            "device_id": {
+                "device_uuid": {
+                    "uuid": "test-router"
+                }
+            },
+            "device_type": "emu-packet-router",
+            "device_operational_status": 1,
+            "device_drivers": [
+                0
+            ],
+            "device_endpoints": [],
+            "device_config": {
+                "config_rules": []
             }
         }
     ]

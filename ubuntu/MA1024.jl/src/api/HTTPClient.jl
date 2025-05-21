@@ -82,3 +82,32 @@ function post_device(api_url::String, device::Ctx.Device)
         body = body_json)
     return resp.status == 200
 end
+
+function ensure_post_device(api_url::String, device::Ctx.Device)::Bool
+    url  = "$api_url/devices"
+    body = JSON3.write(Dict("devices" => [device]))
+
+    try
+        resp = HTTP.post(url; headers = ["Content-Type"=>"application/json"], body)
+        if resp.status == 200
+            println("Device created successfully")
+            return true
+        end
+    catch e
+        if isa(e, HTTP.Exceptions.StatusError) && e.status == 500
+            println("Caught 500, double-checking…")
+            println("Device id: ", device.device_id.device_uuid.uuid)
+            try
+                _ = get_device(api_url, string(device.device_id.device_uuid.uuid))
+                println("✓ Device actually exists")
+                return true
+            catch
+                println("✗ Device does not exist")
+            end
+            return false
+        else
+            rethrow(e)   # something else went wrong
+        end
+    end
+    return false
+end

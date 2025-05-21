@@ -4,20 +4,47 @@ export TFSRouter, TeraflowSDN
 using MINDFul
 using JSON3
 using UUIDs
+using JLD2
+using ProtoBuf: OneOf 
 import ..Ctx
 # Add these lines:
 include("../api/HTTPClient.jl")
+
+
+const TFS_UUID_NAMESPACE = UUID("e2f3946f-1d0b-4aee-9e98-7d2b1862c287")
+
+"""
+    stable_uuid(node_id::Int, kind::Symbol) → String
+
+Same (node_id, :router | :oxc | :tm) ⇒ same UUID on every run.
+"""
+function stable_uuid(node_id::Int, kind::Symbol)
+    return string(UUIDs.uuid5(TFS_UUID_NAMESPACE, "$(node_id)-$(kind)"))
+end
 
 struct TFSRouter
     end
 # Define the TeraFlowSDN struct
 struct TeraflowSDN <: MINDFul.AbstractSDNController
     api_url::String
-
+    device_map::Dict{Tuple{Int,Symbol},String}   # (node_id, :router/:oxc/:tm) → uuid
 #    mapping::Dict{Int,Any} =Dict(ibnnodeid => Dict("router" => Dict(tfsuuid ... additional only tfs info)))
 end
 
-TeraflowSDN() = TeraflowSDN("http://127.0.0.1:80/tfs-api")
+TeraflowSDN() = TeraflowSDN("http://127.0.0.1:80/tfs-api", Dict{Tuple{Int,Symbol},String}())
+
+function save_device_map(path::AbstractString, sdn::TeraflowSDN)
+    @save path device_map = sdn.device_map
+end
+
+function load_device_map!(path::AbstractString, sdn::TeraflowSDN)
+    isfile(path) || return
+    @load path device_map                # loads a Dict into local var
+
+    empty!(sdn.device_map)               # wipe current contents
+    merge!(sdn.device_map, device_map)   # copy entries in-place
+end
+
 
 function minimal_tfs_context(context_uuid::String)
     return Ctx.Context(
@@ -49,87 +76,102 @@ function routerview_to_configrule(routerview::MINDFul.RouterView)
     return ports
 end
 
-function push_node_devices_to_tfs(nodeview, sdncontroller, context_uuid, topology_uuid)
-    # Push router if present
+function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
+
+    node_id = nodeview.nodeproperties.localnode
+
+    # ───────────────────────────────── Router ───────────────────────────────
     if nodeview.routerview !== nothing
-        routerview = nodeview.routerview
-        device_uuid = string(UUIDs.uuid4())
-        device = Ctx.Device(
-            Ctx.DeviceId(Ctx.Uuid(device_uuid)),
-            "Router-$(device_uuid)",
-            "emu-packet-router",
-            Ctx.DeviceConfig([]),
-            Ctx.DeviceOperationalStatusEnum.DEVICEOPERATIONALSTATUS_ENABLED,
-            Ctx.DeviceDriverEnum.T[],
-            Ctx.EndPoint[],
-            Ctx.Component[],
-            nothing
-        )
-        # 1. POST to create device
-        post_device(sdncontroller.api_url, device)
-        # 2. PUT to add config rules
-        ports = routerview.portnumber
-        rule = Ctx.ConfigRule(
-            Ctx.ConfigActionEnum.CONFIGACTION_SET,
-            OneOf(:custom, Ctx.ConfigRule_Custom("/router-ports", JSON3.write(Dict("ports" => ports))))
-        )
-        device.device_config = Ctx.DeviceConfig([rule])
-        put_device(sdncontroller.api_url, device_uuid, device)
+        key   = (node_id, :router)
+        uuid  = get!(sdn.device_map, key) do
+                    stable_uuid(node_id, :router)
+                end
+        dev   = Ctx.Device(
+                   Ctx.DeviceId(Ctx.Uuid(uuid)),
+                   "Router-$uuid",
+                   "emu-packet-router",
+                   Ctx.DeviceConfig([]),
+                   Ctx.DeviceOperationalStatusEnum.DEVICEOPERATIONALSTATUS_ENABLED,
+                   [Ctx.DeviceDriverEnum.DEVICEDRIVER_UNDEFINED],
+                   Ctx.EndPoint[], Ctx.Component[], nothing)
+
+        if ensure_post_device(sdn.api_url, dev)
+            ports = nodeview.routerview.portnumber
+            rule  = Ctx.ConfigRule(
+                    Ctx.ConfigActionEnum.CONFIGACTION_SET,
+                    OneOf(:custom,
+                            Ctx.ConfigRule_Custom("/router-ports",
+                                                JSON3.write(Dict("ports" => ports)))))
+
+            ok = add_config_rule!(sdn.api_url, uuid, rule)
+            !ok && @warn "Router rule update failed for $uuid"
+        else
+            @warn "Router device $uuid could not be created/updated"
+        end
     end
 
-    # Push OXC if present
+    # ───────────────────────────────── OXC ──────────────────────────────────
     if nodeview.oxcview !== nothing
-        oxcview = nodeview.oxcview
-        device_uuid = string(UUIDs.uuid4())
-        device = Ctx.Device(
-            Ctx.DeviceId(Ctx.Uuid(device_uuid)),
-            "OXC-$(device_uuid)",
-            "emu-optical-roadm",
-            Ctx.DeviceConfig([]),
-            Ctx.DeviceOperationalStatusEnum.DEVICEOPERATIONALSTATUS_ENABLED,
-            Ctx.DeviceDriverEnum.T[],
-            Ctx.EndPoint[],
-            Ctx.Component[],
-            nothing
-        )
-        post_device(sdncontroller.api_url, device)
-        adddropports = oxcview.adddropportnumber
-        rule = Ctx.ConfigRule(
-            Ctx.ConfigActionEnum.CONFIGACTION_SET,
-            OneOf(:custom, Ctx.ConfigRule_Custom("/oxc-adddropports", JSON3.write(Dict("adddropports" => adddropports))))
-        )
-        device.device_config = Ctx.DeviceConfig([rule])
-        put_device(sdncontroller.api_url, device_uuid, device)
+        key   = (node_id, :oxc)
+        uuid  = get!(sdn.device_map, key) do
+                    stable_uuid(node_id, :oxc)
+                end
+        dev   = Ctx.Device(
+                   Ctx.DeviceId(Ctx.Uuid(uuid)),
+                   "OXC-$uuid",
+                   "emu-optical-roadm",
+                   Ctx.DeviceConfig([]),
+                   Ctx.DeviceOperationalStatusEnum.DEVICEOPERATIONALSTATUS_ENABLED,
+                   [Ctx.DeviceDriverEnum.DEVICEDRIVER_UNDEFINED],
+                   Ctx.EndPoint[], Ctx.Component[], nothing)
+
+        if ensure_post_device(sdn.api_url, dev)
+            adddrop = nodeview.oxcview.adddropportnumber
+            rule    = Ctx.ConfigRule(
+                        Ctx.ConfigActionEnum.CONFIGACTION_SET,
+                        OneOf(:custom,
+                              Ctx.ConfigRule_Custom("/oxc-adddropports",
+                                                    JSON3.write(Dict("adddropports" => adddrop)))))
+            ok = add_config_rule!(sdn.api_url, uuid, rule)
+            !ok && @warn "Router rule update failed for $uuid"
+        else
+            @warn "OXC device $uuid could not be created/updated"
+        end
     end
 
-    # Push transmission modules if present
+    # ─────────────────────────────── Transmission Modules ───────────────────
     if nodeview.transmissionmoduleviewpool !== nothing
         for tmview in nodeview.transmissionmoduleviewpool
-            device_uuid = string(UUIDs.uuid4())
-            device = Ctx.Device(
-                Ctx.DeviceId(Ctx.Uuid(device_uuid)),
-                "TM-$(device_uuid)",
-                "emu-optical-transponder",
-                Ctx.DeviceConfig([]),
-                Ctx.DeviceOperationalStatusEnum.DEVICEOPERATIONALSTATUS_ENABLED,
-                Ctx.DeviceDriverEnum.T[],
-                Ctx.EndPoint[],
-                Ctx.Component[],
-                nothing
-            )
-            post_device(sdncontroller.api_url, device)
-            modes = tmview.transmissionmodes
-            rule = Ctx.ConfigRule(
-                Ctx.ConfigActionEnum.CONFIGACTION_SET,
-                OneOf(:custom, Ctx.ConfigRule_Custom("/transmission-modes", JSON3.write(Dict("modes" => modes))))
-            )
-            device.device_config = Ctx.DeviceConfig([rule])
-            put_device(sdncontroller.api_url, device_uuid, device)
+            key   = (node_id, :tm)
+            uuid  = get!(sdn.device_map, key) do
+                        stable_uuid(node_id, :tm)
+                    end
+            dev   = Ctx.Device(
+                       Ctx.DeviceId(Ctx.Uuid(uuid)),
+                       "TM-$uuid",
+                       "emu-optical-transponder",
+                       Ctx.DeviceConfig([]),
+                       Ctx.DeviceOperationalStatusEnum.DEVICEOPERATIONALSTATUS_ENABLED,
+                       [Ctx.DeviceDriverEnum.DEVICEDRIVER_UNDEFINED],
+                       Ctx.EndPoint[], Ctx.Component[], nothing)
+
+            if ensure_post_device(sdn.api_url, dev)
+                modes = tmview.transmissionmodes
+                rule  = Ctx.ConfigRule(
+                            Ctx.ConfigActionEnum.CONFIGACTION_SET,
+                            OneOf(:custom,
+                                  Ctx.ConfigRule_Custom("/transmission-modes",
+                                                        JSON3.write(Dict("modes" => modes)))))
+                ok = add_config_rule!(sdn.api_url, uuid, rule)
+                !ok && @warn "Router rule update failed for $uuid"
+            else
+                @warn "TM device $uuid could not be created/updated"
+            end
         end
     end
 end
 
 export routerview_to_configrule, minimal_tfs_context, minimal_tfs_topology, 
-        push_node_devices_to_tfs
+        push_node_devices_to_tfs, save_device_map, load_device_map!
 
 end
