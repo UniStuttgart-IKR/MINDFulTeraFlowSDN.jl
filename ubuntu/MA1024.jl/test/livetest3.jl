@@ -17,9 +17,9 @@ ibnag1 = MINDF.default_IBNAttributeGraph(ag1)
 
 # Prepare all required arguments
 operationmode = MINDF.DefaultOperationMode()
-ibnfid = AG.graph_attr(ibnag1)  # AG is likely AttributeGraphs
+ibnfid = AG.graph_attr(ibnag1) 
 intentdag = MINDF.IntentDAG()
-ibnfhandlers = MINDF.AbstractIBNFHandler[]  # or your handlers
+ibnfhandlers = MINDF.AbstractIBNFHandler[]
 sdncontroller = TeraflowSDN()
 load_device_map!("data/device_map.jld2", sdncontroller)
 
@@ -38,10 +38,17 @@ topology_uuid = "admin"
 # println("Using topology_uuid: $topology_uuid")
 
 # Fetch RouterView for node 10
-node_id = 10
-nodeview = MINDF.getnodeview(ibnf1, node_id)
-println("Fetched nodeview for node $node_id")
-# println(nodeview)
-push_node_devices_to_tfs(nodeview, sdncontroller)
+# node_id = 20
+# nodeview = MINDF.getnodeview(ibnf1, node_id)
+# text = nodeview.routerview
+# dump(text)
+ibnag = MINDF.getibnag(ibnf1)                       
+nodeviews = MINDF.getnodeviews(ibnag)
+
+for nodeview in nodeviews
+    # If you want to see which node: 
+    println("Processing node: ", nodeview.nodeproperties.localnode)  # if nodeview has a getnode method
+    push_node_devices_to_tfs(nodeview, sdncontroller)
+end
+
 save_device_map("data/device_map.jld2", sdncontroller)
-println("Pushed node devices to TFS")
