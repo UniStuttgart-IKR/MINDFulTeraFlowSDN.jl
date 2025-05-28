@@ -111,3 +111,49 @@ function ensure_post_device(api_url::String, device::Ctx.Device)::Bool
     end
     return false
 end
+
+function get_links(api_url::String)
+    resp = HTTP.get("$api_url/links")
+    return JSON3.read(String(resp.body))
+end
+
+function get_link(api_url::String, link_uuid::String)
+    resp = HTTP.get("$api_url/link/$link_uuid")
+    return JSON3.read(String(resp.body))
+end
+
+function post_link(api_url::String, link::Ctx.Link)
+    url = "$api_url/links"
+    body_json = JSON3.write(Dict("links" => [link]))
+    # println("Link Request JSON: ", body_json)
+    resp = HTTP.post(url;
+        headers = ["Content-Type"=>"application/json"],
+        body = body_json)
+    return resp.status == 200
+end
+
+function ensure_post_link(api_url::String, link::Ctx.Link)::Bool
+    try
+        success = post_link(api_url, link)
+        if success
+            println("Link created successfully")
+            return true
+        end
+    catch e
+        if isa(e, HTTP.Exceptions.StatusError) && e.status == 500
+            println("Caught 500 for link, double-checking…")
+            println("Link id: ", link.link_id.link_uuid.uuid)
+            try
+                _ = get_link(api_url, string(link.link_id.link_uuid.uuid))
+                println("✓ Link actually exists")
+                return true
+            catch
+                println("✗ Link does not exist")
+            end
+            return false
+        else
+            rethrow(e)
+        end
+    end
+    return false
+end

@@ -45,10 +45,26 @@ topology_uuid = "admin"
 ibnag = MINDF.getibnag(ibnf1)                       
 nodeviews = MINDF.getnodeviews(ibnag)
 
+println("\n=== Creating Devices ===")
 for nodeview in nodeviews
     # If you want to see which node: 
     println("Processing node: ", nodeview.nodeproperties.localnode)  # if nodeview has a getnode method
-    push_node_devices_to_tfs(nodeview, sdncontroller)
+    # push_node_devices_to_tfs(nodeview, sdncontroller)
 end
 
+println("\n=== Saving Device Map ===")
 save_device_map("data/device_map.jld2", sdncontroller)
+println("✓ Device map saved with $(length(sdncontroller.device_map)) entries")
+
+# Create all network links after devices are created
+intra_links, inter_links = create_all_network_links(sdncontroller, nodeviews)
+
+println("\n=== Final Save ===")
+save_device_map("data/device_map.jld2", sdncontroller)
+println("✓ Final device map saved with all devices and links")
+
+println("\n=== Process Complete ===")
+println("Total devices and endpoints: $(length(sdncontroller.device_map))")
+println("Total links: $(length(sdncontroller.link_map))")  # Show link count separately
+println("Intra-node links processed: $intra_links") 
+println("Inter-node links processed: $inter_links")

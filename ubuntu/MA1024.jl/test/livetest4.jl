@@ -1,30 +1,92 @@
-using MA1024, MA1024.TFS
+using MA1024, JSON3
+using MA1024.TFS
+using JLD2, UUIDs
+using MINDFul
+import AttributeGraphs as AG
 
-context_uuid = "admin3"
-topology_uuid = "topo2"
+const MINDF = MINDFul
 
-ctx = minimal_tfs_context(context_uuid)
-topo = minimal_tfs_topology(context_uuid, topology_uuid)
+println("=== TeraFlow Link Creation Test ===")
 
-api_url = "http://127.0.0.1:80/tfs-api"
+# Initialize SDN controller
+sdncontroller = TeraflowSDN()
+load_device_map!("data/device_map.jld2", sdncontroller)
 
-# contexts_json = get_contexts(api_url)
-# println("Contexts: $contexts_json")
-# contexts = contexts_json["contexts"]
+println("Loaded device map with $(length(sdncontroller.device_map)) entries")
 
-# # Extract all context UUIDs
-# context_uuids = [ctx["context_id"]["context_uuid"]["uuid"] for ctx in contexts]
+# Display current device map for node 24
+node_id = 24
+println("\nDevice map entries for node $node_id:")
+for (key, uuid) in sdncontroller.device_map
+    if key[1] == node_id
+        println("  $key => $uuid")
+    end
+end
 
-# println("Context UUIDs: ", context_uuids)
+# Check if both router and OXC endpoints exist for node 24
+router_ep_key = (node_id, :router_ep)
+oxc_ep_key = (node_id, :oxc_ep)
 
-# # For each context UUID, get and print its topologies
-# for context_uuid in context_uuids
-#     topologies = get_topologies(api_url, context_uuid)
-#     println("Topologies for context $context_uuid: $topologies")
-# end
+if haskey(sdncontroller.device_map, router_ep_key) && haskey(sdncontroller.device_map, oxc_ep_key)
+    println("\n✓ Both Router and OXC endpoints found for node $node_id")
+    
+    router_ep_uuid = sdncontroller.device_map[router_ep_key]
+    oxc_ep_uuid = sdncontroller.device_map[oxc_ep_key]
+    
+    println("  Router endpoint UUID: $router_ep_uuid")
+    println("  OXC endpoint UUID: $oxc_ep_uuid")
+    
+    # Create the link between router and OXC on node 24
+    println("\n--- Creating Router-OXC Link for Node $node_id ---")
+    
+    link_created = create_router_oxc_link(sdncontroller, node_id; 
+                                        link_type = :copper) 
+    
+    if link_created
+        println("✅ Successfully created Router-OXC link for node $node_id")
+        
+        # Save updated device map
+        save_device_map("data/device_map.jld2", sdncontroller)
+        println("✓ Device map saved")
+        
+        # Verify the link was created by querying TFS
+        println("\n--- Verifying Link Creation ---")
+        try
+            links_response = get_links(sdncontroller.api_url)
+            println("Current links in TFS:")
+            
+            if haskey(links_response, "links") && !isempty(links_response["links"])
+                for link in links_response["links"]
+                    link_name = get(link, "name", "Unknown")
+                    link_uuid = get(link, "link_id", Dict())["link_uuid"]["uuid"]
+                    link_type = get(link, "link_type", "Unknown")
+                    println("Found  - $link_name (UUID: $link_uuid, Type: $link_type)")
+                end
+            else
+                println("  No links found")
+            end
+            
+        catch e
+            println("⚠️  Error retrieving links: $e")
+        end
+        
+    else
+        println("❌ Failed to create Router-OXC link for node $node_id")
+    end
+    
+else
+    println("\n❌ Missing endpoints for node $node_id")
+    if !haskey(sdncontroller.device_map, router_ep_key)
+        println("  Missing: Router endpoint")
+    end
+    if !haskey(sdncontroller.device_map, oxc_ep_key)
+        println("  Missing: OXC endpoint")
+    end
+    
+    println("\nAvailable device map entries:")
+    for (key, uuid) in sdncontroller.device_map
+        println("  $key => $uuid")
+    end
+end
 
-ok_ctx = post_context(api_url, ctx)
-println(ok_ctx ? "✓ Context POSTed" : "✗ Context POST failed")
-
-# ok_topo = post_topology_minimal(context_uuid, topo)
-# println(ok_topo ? "✓ Topology POSTed" : "✗ Topology POST failed")
+println("\n=== Test Complete ===")
