@@ -45,6 +45,16 @@ topology_uuid = "admin"
 ibnag = MINDF.getibnag(ibnf1)                       
 nodeviews = MINDF.getnodeviews(ibnag)
 
+
+# println("\n=== Calculate how many endpoints are needed for each OXC node ===")
+# oxc_endpoint_needs = calculate_oxc_endpoint_needs(nodeviews)
+# for (node_id, num_eps) in oxc_endpoint_needs
+#     create_oxc_endpoints(sdncontroller, node_id, num_eps)
+# end
+
+# # USAGE EXAMPLE:
+# print_oxc_endpoint_requirements(nodeviews)
+
 println("\n=== Creating Devices ===")
 for nodeview in nodeviews
     # If you want to see which node: 
@@ -65,6 +75,7 @@ println("✓ Final device map saved with all devices and links")
 
 println("\n=== Process Complete ===")
 println("Total devices and endpoints: $(length(sdncontroller.device_map))")
-println("Total links: $(length(sdncontroller.link_map))")  # Show link count separately
-println("Intra-node links processed: $intra_links") 
-println("Inter-node links processed: $inter_links")
+println("Total intra-node links: $(length(sdncontroller.intra_link_map))")
+println("Total inter-node links: $(length(sdncontroller.inter_link_map))")
+println("Intra-node links created: $intra_links") 
+println("Inter-node links created: $inter_links")

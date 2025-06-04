@@ -54,11 +54,6 @@ end
 
 function minimal_topology_json(topo::Ctx.Topology)
     d = JSON3.read(JSON3.write(topo), Dict{String,Any})
-    for field in ("device_ids", "link_ids", "optical_link_ids", "name")
-        if haskey(d, field)
-            delete!(d, field)
-        end
-    end
     return d
 end
 

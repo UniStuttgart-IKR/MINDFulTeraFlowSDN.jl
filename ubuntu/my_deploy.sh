@@ -216,4 +216,4 @@ export KFK_NAMESPACE="kafka"
 export KFK_SERVER_PORT="9092"
 
 # Set the flag to YES for redeploying of Apache Kafka
-export KFK_REDEPLOY="YES"
+export KFK_REDEPLOY=""
