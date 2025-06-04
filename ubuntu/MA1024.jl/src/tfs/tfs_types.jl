@@ -29,6 +29,7 @@ struct TeraflowSDN <: MINDFul.AbstractSDNController
     api_url::String
     device_map::Dict{Tuple{Int,Symbol},String}   # (node_id, :router/:oxc/:tm) → uuid
     link_map::Dict{Any,String}                   # Separate storage for links
+    # create inter node link map and intra node link map separately
 end
 
 TeraflowSDN() = TeraflowSDN("http://127.0.0.1:80/tfs-api", Dict{Tuple{Int,Symbol},String}(), Dict{Any,String}())
@@ -90,8 +91,12 @@ function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
 
         ep_rule = _custom_rule("_connect/settings",
                    Dict("endpoints" => [Dict("sample_types"=>Any[],
-                                              "type"=>"copper",
+                                              "type"=>"copper",   # check with openconfig for line card port
                                               "uuid"=>ep_uuid)]) )
+
+        # Fix: Use proper array constructor for device_drivers
+        device_drivers = Vector{Ctx.DeviceDriverEnum.T}()
+        push!(device_drivers, Ctx.DeviceDriverEnum.DEVICEDRIVER_UNDEFINED)
 
         dev  = Ctx.Device(
                     Ctx.DeviceId(Ctx.Uuid(uuid)),
@@ -99,7 +104,7 @@ function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
                     "emu-packet-router",                # device_type
                     Ctx.DeviceConfig([ep_rule]),               # empty config – rules follow
                     Ctx.DeviceOperationalStatusEnum.DEVICEOPERATIONALSTATUS_ENABLED,
-                    [Ctx.DeviceDriverEnum.DEVICEDRIVER_UNDEFINED],
+                    device_drivers,  # Use the properly constructed array
                     Ctx.EndPoint[], Ctx.Component[], nothing)
 
         if ensure_post_device(sdn.api_url, dev)
@@ -123,8 +128,12 @@ function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
 
         ep_rule = _custom_rule("_connect/settings",
                    Dict("endpoints" => [Dict("sample_types"=>Any[],
-                                              "type"=>"copper",
+                                              "type"=>"copper",   # check with openconfig for cross connect port
                                               "uuid"=>ep_uuid)]) )
+
+        # Fix: Use proper array constructor for device_drivers
+        device_drivers = Vector{Ctx.DeviceDriverEnum.T}()
+        push!(device_drivers, Ctx.DeviceDriverEnum.DEVICEDRIVER_UNDEFINED)
 
         dev  = Ctx.Device(
                     Ctx.DeviceId(Ctx.Uuid(uuid)),
@@ -132,7 +141,7 @@ function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
                     "emu-optical-roadm",
                     Ctx.DeviceConfig([ep_rule]),
                     Ctx.DeviceOperationalStatusEnum.DEVICEOPERATIONALSTATUS_ENABLED,
-                    [Ctx.DeviceDriverEnum.DEVICEDRIVER_UNDEFINED],
+                    device_drivers,  # Use the properly constructed array
                     Ctx.EndPoint[], Ctx.Component[], nothing)
 
         if ensure_post_device(sdn.api_url, dev)
@@ -395,26 +404,28 @@ function create_link_between_devices(sdn::TeraflowSDN, device1_key::Tuple, devic
         )
     ]
     
-    # Determine link type enum
+    # Updated link type enum mapping to match new proto of TFS 5.0.0
     tfs_link_type = if link_type == :copper
         Ctx.LinkTypeEnum.LINKTYPE_COPPER
-    elseif link_type == :optical
-        Ctx.LinkTypeEnum.LINKTYPE_OPTICAL
-    elseif link_type == :virtual_copper
-        Ctx.LinkTypeEnum.LINKTYPE_VIRTUAL_COPPER
-    elseif link_type == :virtual_optical
-        Ctx.LinkTypeEnum.LINKTYPE_VIRTUAL_OPTICAL
+    elseif link_type == :fiber || link_type == :optical  # Map :optical to :fiber
+        Ctx.LinkTypeEnum.LINKTYPE_FIBER
+    elseif link_type == :radio
+        Ctx.LinkTypeEnum.LINKTYPE_RADIO
+    elseif link_type == :virtual
+        Ctx.LinkTypeEnum.LINKTYPE_VIRTUAL
+    elseif link_type == :management
+        Ctx.LinkTypeEnum.LINKTYPE_MANAGEMENT
     else
-        Ctx.LinkTypeEnum.LINKTYPE_COPPER
+        Ctx.LinkTypeEnum.LINKTYPE_COPPER  # Default fallback
     end
     
-    # Create link with empty attributes (as requested)
+    # Create link with proper structure
     link = Ctx.Link(
         Ctx.LinkId(Ctx.Uuid(link_uuid)),
         link_name,
-        endpoint_ids,
-        Ctx.LinkAttributes(0.0f0, 0.0f0),  # empty attributes: total_capacity=0, used_capacity=0
-        tfs_link_type
+        tfs_link_type,           # link_type moved to position 3
+        endpoint_ids,            # link_endpoint_ids moved to position 4
+        Ctx.LinkAttributes(0.0f0, 0.0f0)  # attributes moved to position 5
     )
     
     # Use ensure_post_link for robust creation with verification
@@ -465,7 +476,7 @@ device_type can be :router_ep, :oxc_ep, or (:tm_ep, idx)
 """
 function create_inter_node_link(sdn::TeraflowSDN, node1_id::Int, node2_id::Int,
                                device1_type::Symbol, device2_type::Symbol;
-                               link_type::Symbol = :copper)
+                               link_type::Symbol = :fiber)  # Changed default from :copper to :fiber
     
     # Build endpoint keys
     device1_key = (node1_id, device1_type)
@@ -575,8 +586,9 @@ function connect_all_oxcs_inter_node(sdn::TeraflowSDN, nodeviews)
                     if link_pair ∉ processed_links
                         push!(processed_links, link_pair)
                         
-                        println("\nCreating/Updating inter-node OXC link: $(link_pair[1]) ↔ $(link_pair[2])...")
-                        if create_inter_node_link(sdn, link_pair[1], link_pair[2], :oxc_ep, :oxc_ep; link_type=:optical)
+                        println("Creating/Updating inter-node OXC link: $(link_pair[1]) ↔ $(link_pair[2])...")
+                        # Use :fiber instead of :optical
+                        if create_inter_node_link(sdn, link_pair[1], link_pair[2], :oxc_ep, :oxc_ep; link_type=:fiber)
                             links_created += 1
                         end
                     end

@@ -7,5 +7,3 @@ include("register_proto_structtypes.jl")
 
 # ---- plain function files ----------------------------------------------------
 include("HTTPClient.jl")   # defines get_device, put_device, …
-include("Utils.jl")
-include("Server.jl")       # defines Oxygen routes, start(), stop()

@@ -49,7 +49,7 @@ println("\n=== Creating Devices ===")
 for nodeview in nodeviews
     # If you want to see which node: 
     println("Processing node: ", nodeview.nodeproperties.localnode)  # if nodeview has a getnode method
-    # push_node_devices_to_tfs(nodeview, sdncontroller)
+    push_node_devices_to_tfs(nodeview, sdncontroller)
 end
 
 println("\n=== Saving Device Map ===")

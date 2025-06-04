@@ -58,11 +58,12 @@ function kafka_deploy() {
     # Kafka zookeeper service should be deployed before the kafka service
     kubectl --namespace ${KFK_NAMESPACE} apply -f "${TMP_MANIFESTS_FOLDER}/${KFK_ZOOKEEPER_MANIFEST}"
 
-    KFK_ZOOKEEPER_SERVICE="zookeeper-service"    # this command may be replaced with command to extract service name automatically
-    KFK_ZOOKEEPER_IP=$(kubectl --namespace ${KFK_NAMESPACE} get service ${KFK_ZOOKEEPER_SERVICE} -o 'jsonpath={.spec.clusterIP}')
+    #KFK_ZOOKEEPER_SERVICE="zookeeper-service"    # this command may be replaced with command to extract service name automatically
+    #KFK_ZOOKEEPER_IP=$(kubectl --namespace ${KFK_NAMESPACE} get service ${KFK_ZOOKEEPER_SERVICE} -o 'jsonpath={.spec.clusterIP}')
 
     # Kafka service should be deployed after the zookeeper service
-    sed -i "s/<ZOOKEEPER_INTERNAL_IP>/${KFK_ZOOKEEPER_IP}/" "${TMP_MANIFESTS_FOLDER}/$KFK_MANIFEST"
+    #sed -i "s/<ZOOKEEPER_INTERNAL_IP>/${KFK_ZOOKEEPER_IP}/" "${TMP_MANIFESTS_FOLDER}/$KFK_MANIFEST"
+    sed -i "s/<KAFKA_NAMESPACE>/${KFK_NAMESPACE}/" "${TMP_MANIFESTS_FOLDER}/$KFK_MANIFEST"
 
     # echo ">>> Deploying Apache Kafka Broker"
     kubectl --namespace ${KFK_NAMESPACE} apply -f "${TMP_MANIFESTS_FOLDER}/$KFK_MANIFEST"
