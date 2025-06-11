@@ -783,6 +783,7 @@ function create_all_network_links(sdn::TeraflowSDN, nodeviews)
     return (intra_links, inter_links)
 end
 
-export create_all_network_links, calculate_oxc_endpoint_needs, create_oxc_endpoints, print_link_status, push_node_devices_to_tfs, save_device_map, load_device_map!
-
+export create_all_network_links, calculate_oxc_endpoint_needs, create_oxc_endpoints, 
+    print_link_status, push_node_devices_to_tfs, save_device_map, load_device_map!,
+    create_router_oxc_link, create_inter_node_oxc_link
 end
