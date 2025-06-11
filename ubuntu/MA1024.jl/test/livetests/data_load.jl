@@ -28,21 +28,13 @@ ibnf1 = MINDF.IBNFramework(ibnag1)
 
 # Get the NodeView for node 10
 nodeview = MINDF.getnodeview(ibnf1, 10)
-println("NodeView for node 10:")
-println(nodeview)
+# println("NodeView for node 10:")
+# println(nodeview)
 
 # Extract the RouterView from the NodeView
-routerview = nodeview.routerview
+tmview = nodeview.transmissionmoduleviewpool
+tmview[1].transmissionmodes
 
-# Check if the RouterView is not nothing
-if routerview !== nothing
-    println("\nRouterView for node 10:")
-    println("Router: ", routerview.router)
-    println("Number of Ports: ", routerview.portnumber)
-    println("Port Reservations: ", routerview.portreservations)
-else
-    println("\nNo RouterView available for node 10.")
-end
 
 ###########
 # TFS devices need to be available

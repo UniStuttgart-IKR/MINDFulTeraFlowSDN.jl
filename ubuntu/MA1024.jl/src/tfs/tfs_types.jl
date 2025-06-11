@@ -238,41 +238,41 @@ function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
     end
 
     # ─────────────────────── Transmission Modules ───────────────────────────
-    # if nodeview.transmissionmoduleviewpool !== nothing
-    #     for (idx, tmview) in enumerate(nodeview.transmissionmoduleviewpool)
-    #         key  = (node_id, (:tm, idx))             # one UUID per card
-    #         uuid = get!(sdn.device_map, key) do
-    #                    # include pool-index → stable & unique
-    #                    stable_uuid(node_id * 10_000 + idx, :tm)
-    #                end
+    if nodeview.transmissionmoduleviewpool !== nothing
+        for (idx, tmview) in enumerate(nodeview.transmissionmoduleviewpool)
+            key  = (node_id, Symbol("tm_$idx"))             # Fixed: use Symbol instead of tuple
+            uuid = get!(sdn.device_map, key) do
+                    # include pool-index → stable & unique
+                    stable_uuid(node_id * 10_000 + idx, :tm)
+                end
 
-    #         # --- endpoint BEFORE device creation --------------------------------
-    #         ep_uuid = stable_uuid(node_id*10_000 + idx, :tm_ep)
-    #         sdn.device_map[(node_id, (:tm_ep, idx))] = ep_uuid
+            # --- endpoint BEFORE device creation --------------------------------
+            ep_uuid = stable_uuid(node_id*10_000 + idx, :tm_ep)
+            sdn.device_map[(node_id, Symbol("tm_ep_$idx"))] = ep_uuid  # Fixed: use Symbol
 
-    #         ep_rule = _custom_rule("_connect/settings",
-    #                 Dict("endpoints" => [Dict("sample_types"=>Any[],
-    #                                             "type"=>"copper",
-    #                                             "uuid"=>ep_uuid)]) )
-    #         dev  = Ctx.Device(
-    #                   Ctx.DeviceId(Ctx.Uuid(uuid)),
-    #                   "TM-Node-$(node_id)-$(idx)",
-    #                   "emu-optical-transponder",
-    #                   Ctx.DeviceConfig([ep_rule]),
-    #                   Ctx.DeviceOperationalStatusEnum.DEVICEOPERATIONALSTATUS_ENABLED,
-    #                   [Ctx.DeviceDriverEnum.DEVICEDRIVER_UNDEFINED],
-    #                   Ctx.EndPoint[], Ctx.Component[], nothing)
+            ep_rule = _custom_rule("_connect/settings",
+                    Dict("endpoints" => [Dict("sample_types"=>Any[],
+                                                "type"=>"copper",
+                                                "uuid"=>ep_uuid)]) )
+            dev  = Ctx.Device(
+                    Ctx.DeviceId(Ctx.Uuid(uuid)),
+                    "TM-Node-$(node_id)-$(idx)",
+                    "emu-optical-transponder",
+                    Ctx.DeviceConfig([ep_rule]),
+                    Ctx.DeviceOperationalStatusEnum.DEVICEOPERATIONALSTATUS_ENABLED,
+                    [Ctx.DeviceDriverEnum.DEVICEDRIVER_UNDEFINED],
+                    Ctx.EndPoint[], Ctx.Component[], nothing)
 
-    #         if ensure_post_device(sdn.api_url, dev)
-    #             ep_uuid = stable_uuid(node_id*10_000 + idx, :tm_ep)
-    #             sdn.device_map[(node_id, (:tm_ep, idx))] = ep_uuid
-    #             rules   = build_config_rules(tmview; ep_uuid=ep_uuid)
-    #             _push_rules(sdn.api_url, uuid, rules; kind=:TM)
-    #         else
-    #             @warn "TM device $uuid could not be created/updated"
-    #         end
-    #     end
-    # end
+            if ensure_post_device(sdn.api_url, dev)
+                ep_uuid = stable_uuid(node_id*10_000 + idx, :tm_ep)
+                sdn.device_map[(node_id, Symbol("tm_ep_$idx"))] = ep_uuid  # Fixed: use Symbol
+                rules   = build_config_rules(tmview; ep_uuid=ep_uuid)
+                _push_rules(sdn.api_url, uuid, rules; kind=:TM)
+            else
+                @warn "TM device $uuid could not be created/updated"
+            end
+        end
+    end
 
     println("Pushed node devices to TFS")
 
@@ -403,7 +403,7 @@ end
 
 
 # ───────── TransmissionModuleView ─────────────────────────────────────────
-function build_config_rules(tm::MINDFul.TransmissionModuleView)
+function build_config_rules(tm::MINDFul.TransmissionModuleView; ep_uuid::Union{String,Nothing}=nothing)
     rules = Ctx.ConfigRule[]
     push!(rules, _custom_rule("/transmissionmodule", string(typeof(tm.transmissionmodule))))
     push!(rules, _custom_rule("/name",               tm.name))
@@ -452,8 +452,8 @@ function create_link_between_devices(sdn::TeraflowSDN, device1_key::Tuple, devic
         :router
     elseif ep1_type == :oxc_ep || (string(ep1_type) |> x -> startswith(x, "oxc_ep_"))
         :oxc
-    elseif ep1_type isa Tuple && ep1_type[1] == :tm_ep
-        (:tm, ep1_type[2])
+    elseif string(ep1_type) |> x -> startswith(x, "tm_")  # Fixed: handle Symbol-based TM keys
+        Symbol(replace(string(ep1_type), "tm_ep_" => "tm_"))
     else
         error("Unknown endpoint type: $ep1_type")
     end
@@ -462,8 +462,8 @@ function create_link_between_devices(sdn::TeraflowSDN, device1_key::Tuple, devic
         :router
     elseif ep2_type == :oxc_ep || (string(ep2_type) |> x -> startswith(x, "oxc_ep_"))
         :oxc
-    elseif ep2_type isa Tuple && ep2_type[1] == :tm_ep
-        (:tm, ep2_type[2])
+    elseif string(ep2_type) |> x -> startswith(x, "tm_")  # Fixed: handle Symbol-based TM keys
+        Symbol(replace(string(ep2_type), "tm_ep_" => "tm_"))
     else
         error("Unknown endpoint type: $ep2_type")
     end
