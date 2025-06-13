@@ -10,7 +10,7 @@ export TeraFlowSDN, OneOf, Ctx,
         print_device, add_config_rule!, post_context, post_topology_minimal,
         push_node_devices_to_tfs, post_device, ensure_post_device,
         get_links, get_link, post_link, ensure_post_link,  # Add link functions
-        connect_all_intra_node_devices, connect_all_oxcs_inter_node, create_all_network_links, # Add network linking functions
+        connect_all_intra_node_devices, connect_all_ols_inter_node, create_all_network_links, # Updated network linking functions
         save_device_map, load_device_map!,  # Add device map functions
         start, stop               # from Server.jl
 end
