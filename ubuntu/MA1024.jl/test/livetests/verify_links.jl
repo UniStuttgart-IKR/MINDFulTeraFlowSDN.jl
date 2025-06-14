@@ -1,4 +1,4 @@
-using MA1024, MA1024.TFS, JLD2, MINDFul
+using MA1024, JLD2, MINDFul
 import AttributeGraphs as AG
 
 const MINDF = MINDFul

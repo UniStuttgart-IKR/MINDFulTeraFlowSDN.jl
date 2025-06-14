@@ -1,5 +1,4 @@
 using MA1024, JSON3
-using MA1024.TFS
 using JLD2, UUIDs
 using MINDFul
 import AttributeGraphs as AG
@@ -179,7 +178,7 @@ println("\n=== Starting fresh context creation ===")
 println("Creating admin context and topology...")
 
 # Create proper stable UUIDs using the TFS stable_uuid function
-admin_context_uuid = TFS.stable_uuid(999999, :admin_context)
+admin_context_uuid = stable_uuid(999999, :admin_context)
 
 println("Generated admin_context_uuid: $admin_context_uuid")
 

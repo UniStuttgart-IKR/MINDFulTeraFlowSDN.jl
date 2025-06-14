@@ -1,17 +1,3 @@
-module TFS
-
-using MINDFul
-using JSON3
-using UUIDs
-using JLD2
-using ProtoBuf: OneOf 
-import ..Ctx
-# Add these lines:
-include("../api/HTTPClient.jl")
-
-
-const TFS_UUID_NAMESPACE = UUID("e2f3946f-1d0b-4aee-9e98-7d2b1862c287")
-
 """
     stable_uuid(node_id::Int, kind::Symbol) → String
 
@@ -1122,10 +1108,4 @@ function create_all_network_links(sdn::TeraflowSDN, nodeviews)
     print_link_status(sdn)
     
     return (intra_links, inter_links)
-end
-
-export create_all_network_links, calculate_ols_endpoint_needs, create_ols_endpoints, 
-    print_link_status, push_node_devices_to_tfs, save_device_map, load_device_map!,
-    create_router_tm_link, create_tm_oxc_link, create_oxc_ols_link, create_inter_node_ols_link,
-    TeraflowSDN
 end

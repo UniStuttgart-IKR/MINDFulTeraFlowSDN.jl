@@ -1,16 +1,26 @@
 module MA1024
-using ProtoBuf, JSON3, StructTypes, Oxygen, HTTP, UUIDs
-include("api/api.jl")          # <- pulls every file above
-include("tfs/tfs_types.jl")    # <- pulls every file above
-using ProtoBuf: OneOf          # bring it into MA1024's scope   
 
-# public surface --------------------------------------------------------------
-export TeraFlowSDN, OneOf, Ctx,
-        get_devices, get_device, get_contexts, get_topologies, put_device,
-        print_device, add_config_rule!, post_context, post_topology_minimal,
-        push_node_devices_to_tfs, post_device, ensure_post_device,
-        get_links, get_link, post_link, ensure_post_link,  # Add link functions
-        connect_all_intra_node_devices, connect_all_ols_inter_node, create_all_network_links, # Updated network linking functions
-        save_device_map, load_device_map!,  # Add device map functions
-        start, stop               # from Server.jl
-end
+# 1. All imports at the top level
+using ProtoBuf, JSON3, StructTypes, Oxygen, HTTP, UUIDs, JLD2, MINDFul
+using ProtoBuf: OneOf  # for public export
+
+# 2. All constants at the top level
+const TFS_UUID_NAMESPACE = UUID("e2f3946f-1d0b-4aee-9e98-7d2b1862c287")
+
+# 3. Public API exports
+export TeraflowSDN, OneOf, Ctx,
+       get_devices, get_device, get_contexts, get_topologies, put_device,
+       print_device, add_config_rule!, post_context, post_topology_minimal,
+       push_node_devices_to_tfs, post_device, ensure_post_device,
+       get_links, get_link, post_link, ensure_post_link,
+       connect_all_intra_node_devices, connect_all_ols_inter_node, create_all_network_links,
+       save_device_map, load_device_map!, stable_uuid,
+       create_router_tm_link, create_tm_oxc_link, create_oxc_ols_link, create_inter_node_ols_link,
+       create_all_network_links, calculate_ols_endpoint_needs, create_ols_endpoints,
+       print_link_status
+
+# 4. Include sub-modules (order matters)
+include("api/api.jl")
+include("tfs/tfs_types.jl")
+
+end # module MA1024
