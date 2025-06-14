@@ -987,17 +987,51 @@ function connect_all_ols_inter_node(sdn::TeraflowSDN, nodeviews)
                     if link_pair ∉ processed_pairs
                         push!(processed_pairs, link_pair)
                         
-                        # Check if links already exist (both directions)
-                        existing_outgoing = any(k -> (k[1] == link_pair[1] && k[3] == link_pair[2] && k[6] == :outgoing), keys(sdn.inter_link_map))
-                        existing_incoming = any(k -> (k[1] == link_pair[2] && k[3] == link_pair[1] && k[6] == :incoming), keys(sdn.inter_link_map))
+                        # Check if links already exist in device map
+                        existing_outgoing_key = nothing
+                        existing_incoming_key = nothing
                         
-                        if !existing_outgoing || !existing_incoming
-                            println("🌉 Creating inter-node connection: $(link_pair[1]) ↔ $(link_pair[2])...")
+                        for key in keys(sdn.inter_link_map)
+                            if length(key) >= 6
+                                if key[1] == link_pair[1] && key[3] == link_pair[2] && key[6] == :outgoing
+                                    existing_outgoing_key = key
+                                elseif key[1] == link_pair[2] && key[3] == link_pair[1] && key[6] == :incoming
+                                    existing_incoming_key = key
+                                end
+                            end
+                        end
+                        
+                        if existing_outgoing_key !== nothing && existing_incoming_key !== nothing
+                            # Links exist in map - reuse existing info to post to TFS
+                            println("📋 Reposting existing links: $(link_pair[1]) ↔ $(link_pair[2])...")
+                            
+                            # Post outgoing link using existing data
+                            outgoing_uuid = sdn.inter_link_map[existing_outgoing_key]
+                            src_node, src_ep_id, dst_node, dst_ep_id = existing_outgoing_key[1], existing_outgoing_key[2], existing_outgoing_key[3], existing_outgoing_key[4]
+                            src_ep_key = (src_node, Symbol(src_ep_id))
+                            dst_ep_key = (dst_node, Symbol(dst_ep_id))
+                            link_name = "InterLink-$(src_node)→$(dst_node)-$(src_ep_id)-node-$(src_node)-$(dst_ep_id)-node-$(dst_node)"
+                            
+                            if create_link_between_devices(sdn, src_ep_key, dst_ep_key, link_name, outgoing_uuid; link_type=:fiber)
+                                links_created += 1
+                            end
+                            
+                            # Post incoming link using existing data
+                            incoming_uuid = sdn.inter_link_map[existing_incoming_key]
+                            src_node, src_ep_id, dst_node, dst_ep_id = existing_incoming_key[1], existing_incoming_key[2], existing_incoming_key[3], existing_incoming_key[4]
+                            src_ep_key = (src_node, Symbol(src_ep_id))
+                            dst_ep_key = (dst_node, Symbol(dst_ep_id))
+                            link_name = "InterLink-$(src_node)→$(dst_node)-$(src_ep_id)-node-$(src_node)-$(dst_ep_id)-node-$(dst_node)"
+                            
+                            if create_link_between_devices(sdn, src_ep_key, dst_ep_key, link_name, incoming_uuid; link_type=:fiber)
+                                links_created += 1
+                            end
+                        else
+                            # Links don't exist in map - create new ones
+                            println("🌉 Creating new inter-node connection: $(link_pair[1]) ↔ $(link_pair[2])...")
                             if create_inter_node_ols_link(sdn, link_pair[1], link_pair[2]; link_type=:fiber)
                                 links_created += 2  # 2 unidirectional links created
                             end
-                        else
-                            println("⏭️  Inter-node connection already exists: $(link_pair[1]) ↔ $(link_pair[2]) (both directions)")
                         end
                     end
                 end
@@ -1005,7 +1039,7 @@ function connect_all_ols_inter_node(sdn::TeraflowSDN, nodeviews)
         end
     end
     
-    println("✅ Created $links_created new inter-node links (bidirectional)")
+    println("✅ Created/reposted $links_created inter-node links")
     return links_created
 end
 
