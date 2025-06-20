@@ -284,45 +284,43 @@ function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
     end
 
     # ───────────────────────── OLS (New Device) ──────────────────────────────
-    if nodeview.oxcview !== nothing  # Create OLS only when OXC exists
-        # Calculate and create variable number of fiber endpoints for OLS
-        n_eps = ols_endpoints_needed(nodeview)
-        endpoint_uuids = create_ols_endpoints(sdn, node_id, n_eps)
-        println("  [OLS $node_id] Created $n_eps fiber endpoints before posting device")
+    # Calculate and create variable number of fiber endpoints for OLS
+    n_eps = ols_endpoints_needed(nodeview)
+    endpoint_uuids = create_ols_endpoints(sdn, node_id, n_eps)
+    println("  [OLS $node_id] Created $n_eps fiber endpoints before posting device")
 
-        key  = (node_id, :ols)
-        uuid = get!(sdn.device_map, key) do
-            stable_uuid(node_id, :ols)
-        end
+    key  = (node_id, :ols)
+    uuid = get!(sdn.device_map, key) do
+        stable_uuid(node_id, :ols)
+    end
 
-        endpoints_config = []
-        for (i, ep_uuid) in enumerate(endpoint_uuids)
-            push!(endpoints_config, Dict("sample_types"=>Any[],
-                                        "type"=>"fiber",
-                                        "uuid"=>ep_uuid,
-                                        "name"=>"ols_ep_$(i)_node_$(node_id)"))
-        end
+    endpoints_config = []
+    for (i, ep_uuid) in enumerate(endpoint_uuids)
+        push!(endpoints_config, Dict("sample_types"=>Any[],
+                                    "type"=>"fiber",
+                                    "uuid"=>ep_uuid,
+                                    "name"=>"ols_ep_$(i)_node_$(node_id)"))
+    end
 
-        ep_rule = _custom_rule("_connect/settings", Dict("endpoints" => endpoints_config))
+    ep_rule = _custom_rule("_connect/settings", Dict("endpoints" => endpoints_config))
 
-        device_drivers = Vector{Ctx.DeviceDriverEnum.T}()
-        push!(device_drivers, Ctx.DeviceDriverEnum.DEVICEDRIVER_UNDEFINED)
+    device_drivers = Vector{Ctx.DeviceDriverEnum.T}()
+    push!(device_drivers, Ctx.DeviceDriverEnum.DEVICEDRIVER_UNDEFINED)
 
-        dev  = Ctx.Device(
-                    Ctx.DeviceId(Ctx.Uuid(uuid)),
-                    "OLS-Node-$(node_id)",
-                    "emu-open-line-system",  # New device type
-                    Ctx.DeviceConfig([ep_rule]),
-                    Ctx.DeviceOperationalStatusEnum.DEVICEOPERATIONALSTATUS_ENABLED,
-                    device_drivers,
-                    Ctx.EndPoint[], Ctx.Component[], nothing)
+    dev  = Ctx.Device(
+                Ctx.DeviceId(Ctx.Uuid(uuid)),
+                "OLS-Node-$(node_id)",
+                "emu-open-line-system",  # New device type
+                Ctx.DeviceConfig([ep_rule]),
+                Ctx.DeviceOperationalStatusEnum.DEVICEOPERATIONALSTATUS_ENABLED,
+                device_drivers,
+                Ctx.EndPoint[], Ctx.Component[], nothing)
 
-        if ensure_post_device(sdn.api_url, dev)
-            # OLS doesn't have specific config rules for now, but we can add them later
-            println("✓ OLS device $uuid created successfully")
-        else
-            @warn "OLS device $uuid could not be created/updated"
-        end
+    if ensure_post_device(sdn.api_url, dev)
+        # OLS doesn't have specific config rules for now, but we can add them later
+        println("✓ OLS device $uuid created successfully")
+    else
+        @warn "OLS device $uuid could not be created/updated"
     end
 
     # ─────────────────────── Transmission Modules ───────────────────────────
