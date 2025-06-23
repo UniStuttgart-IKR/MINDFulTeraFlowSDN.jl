@@ -9,7 +9,7 @@ end
 
 struct TeraflowSDN <: MINDFul.AbstractSDNController
     api_url::String
-    device_map::Dict{Tuple{Int,Symbol},String}   # (node_id, :router/:oxc/:ols/:tm_N) → uuid
+    device_map::Dict{Any,String}   # Changed from Dict{Tuple{Int,Symbol},String} to Dict{Any,String}
     intra_link_map::Dict{Tuple{Int,Symbol},String}  # (node_id, :link_type) → uuid
     inter_link_map::Dict{NTuple{6,Any},String}    # (node1, ep1_id, node2, ep2_id, :link, direction) → uuid
     endpoint_usage::Dict{String,Bool}             # endpoint_uuid → is_used
@@ -17,7 +17,7 @@ end
 
 TeraflowSDN() = TeraflowSDN(
     "http://127.0.0.1:80/tfs-api", 
-    Dict{Tuple{Int,Symbol},String}(),
+    Dict{Any,String}(),  # Changed from Dict{Tuple{Int,Symbol},String}()
     Dict{Tuple{Int,Symbol},String}(),
     Dict{NTuple{6,Any},String}(),
     Dict{String,Bool}()
@@ -61,35 +61,36 @@ function load_device_map!(path::AbstractString, sdn::TeraflowSDN)
     end
 end
 
-function ols_endpoints_needed(nodeview)
+# Update OXC endpoint calculation function
+function oxc_endpoints_needed(nodeview)
     neighbors = Set{Int}()
     union!(neighbors, nodeview.nodeproperties.inneighbors)
     union!(neighbors, nodeview.nodeproperties.outneighbors)
-    # OLS needs: 2 endpoints to connect to OXC + 2 endpoints per neighbor for inter-node links
+    # OXC needs: 2 endpoints for TM connection + 2 endpoints per neighbor for inter-node OLS connections
     return 2 + length(neighbors) * 2
 end
 
 """
-    calculate_ols_endpoint_needs(nodeviews) → Dict{Int,Int}
+    calculate_oxc_endpoint_needs(nodeviews) → Dict{Int,Int}
 
-Returns a mapping from OLS node_id to total endpoints needed,
-which is 2 for OXC connection + 2 × number of neighbors (in + out).
+Returns a mapping from OXC node_id to total endpoints needed,
+which is 2 for TM connection + 2 × number of neighbors (in + out).
 """
-function calculate_ols_endpoint_needs(nodeviews)
+function calculate_oxc_endpoint_needs(nodeviews)
     needs = Dict{Int, Int}()
     for nodeview in nodeviews
         node_id = nodeview.nodeproperties.localnode
-        # OLS is created for every node that has an OXC
+        # OXC is created for every node that has devices
         if nodeview.oxcview !== nothing
             neighbors = Set{Int}()
             union!(neighbors, nodeview.nodeproperties.inneighbors)
             union!(neighbors, nodeview.nodeproperties.outneighbors)
             num_links = length(neighbors)
-            needs[node_id] = 2 + num_links * 2  # 2 for OXC + 2 per neighbor
+            needs[node_id] = 2 + num_links * 2  # 2 for TM + 2 per neighbor
         end
     end
     for (node, n_endpoints) in sort(collect(needs))
-        println("  Node $node: OLS endpoints needed = $n_endpoints")
+        println("  Node $node: OXC endpoints needed = $n_endpoints")
     end
     return needs
 end
@@ -153,28 +154,100 @@ function create_oxc_endpoints(sdn::TeraflowSDN, node_id::Int, min_endpoints::Int
     return endpoints
 end
 
-function create_ols_endpoints(sdn::TeraflowSDN, node_id::Int, min_endpoints::Int)
-    """Create variable number of fiber endpoints for an OLS device"""
-    endpoints = String[]
+# Remove OLS-related functions from individual nodes
+# function ols_endpoints_needed(nodeview) - REMOVE
+# function create_ols_endpoints(sdn::TeraflowSDN, node_id::Int, min_endpoints::Int) - REMOVE
+# function get_available_ols_endpoint(sdn::TeraflowSDN, node_id::Int) - REMOVE
+
+# Add new functions for shared OLS devices
+function create_shared_ols_device(sdn::TeraflowSDN, node1_id::Int, node2_id::Int)
+    """Create a shared OLS device between two nodes with 4 fiber endpoints"""
+    # Generate stable UUID for OLS device based on both nodes
+    sorted_nodes = sort([node1_id, node2_id])
+    ols_key = (sorted_nodes[1], sorted_nodes[2], :shared_ols)
+    ols_uuid = get!(sdn.device_map, ols_key) do
+        stable_uuid(sorted_nodes[1] * 1000 + sorted_nodes[2], :shared_ols)
+    end
     
-    for ep_id in 1:min_endpoints
-        ep_uuid = stable_uuid(node_id * 1000 + ep_id + 100, Symbol("ols_ep_$(ep_id)"))
-        ep_key = (node_id, Symbol("ols_ep_$(ep_id)"))
+    # Create 4 fiber endpoints for the shared OLS
+    endpoints = String[]
+    for ep_id in 1:4
+        ep_uuid = stable_uuid(sorted_nodes[1] * 10000 + sorted_nodes[2] * 100 + ep_id, Symbol("shared_ols_ep_$(ep_id)"))
+        ep_key = (sorted_nodes[1], sorted_nodes[2], Symbol("shared_ols_ep_$(ep_id)"))
         
         sdn.device_map[ep_key] = ep_uuid
-        sdn.endpoint_usage[ep_uuid] = false  # Initially unused
+        sdn.endpoint_usage[ep_uuid] = false
         push!(endpoints, ep_uuid)
     end
     
-    return endpoints
+    # Create endpoints config
+    endpoints_config = []
+    for (i, ep_uuid) in enumerate(endpoints)
+        push!(endpoints_config, Dict("sample_types"=>Any[],
+                                    "type"=>"fiber",
+                                    "uuid"=>ep_uuid,
+                                    "name"=>"shared_ols_ep_$(i)_nodes_$(sorted_nodes[1])_$(sorted_nodes[2])"))
+    end
+
+    ep_rule = _custom_rule("_connect/settings", Dict("endpoints" => endpoints_config))
+
+    device_drivers = Vector{Ctx.DeviceDriverEnum.T}()
+    push!(device_drivers, Ctx.DeviceDriverEnum.DEVICEDRIVER_UNDEFINED)
+
+    dev = Ctx.Device(
+        Ctx.DeviceId(Ctx.Uuid(ols_uuid)),
+        "SharedOLS-Nodes-$(sorted_nodes[1])-$(sorted_nodes[2])",
+        "emu-open-line-system",
+        Ctx.DeviceConfig([ep_rule]),
+        Ctx.DeviceOperationalStatusEnum.DEVICEOPERATIONALSTATUS_ENABLED,
+        device_drivers,
+        Ctx.EndPoint[], Ctx.Component[], nothing)
+
+    if ensure_post_device(sdn.api_url, dev)
+        println("✓ Shared OLS device $ols_uuid created successfully for nodes $(sorted_nodes[1]) ↔ $(sorted_nodes[2])")
+        return ols_uuid, endpoints
+    else
+        @warn "Shared OLS device $ols_uuid could not be created/updated"
+        return nothing, []
+    end
 end
 
-function get_available_endpoint(sdn::TeraflowSDN, node_id::Int, prefix::String)
-    """Generic function to get available endpoint with given prefix"""
-    # Find existing endpoints for this node with the given prefix
+function get_available_endpoint(sdn::TeraflowSDN, node_id::Int, ep_prefix::String)
+    """Get an available endpoint for a given node and endpoint type prefix"""
+    available_endpoints = []
+    
+    for (key, uuid) in sdn.device_map
+        # Handle both regular endpoint keys (node_id, :endpoint_name) and shared OLS endpoints
+        if (length(key) == 2 && key[1] == node_id && string(key[2]) |> x -> startswith(x, ep_prefix)) ||
+           (length(key) == 3 && string(key[3]) |> x -> startswith(x, ep_prefix))
+            if !get(sdn.endpoint_usage, uuid, false)
+                push!(available_endpoints, (key, uuid))
+            end
+        end
+    end
+    
+    if isempty(available_endpoints)
+        error("No available $ep_prefix endpoint for node $node_id")
+    end
+    
+    # Return the first available endpoint
+    key, uuid = first(available_endpoints)
+    return key, uuid
+end
+
+function get_available_oxc_endpoint(sdn::TeraflowSDN, node_id::Int)
+    return get_available_endpoint(sdn, node_id, "oxc_ep_")
+end
+
+function get_available_shared_ols_endpoint(sdn::TeraflowSDN, node1_id::Int, node2_id::Int)
+    """Get available endpoint from shared OLS device between two nodes"""
+    sorted_nodes = sort([node1_id, node2_id])
+    
+    # Find existing endpoints for this shared OLS
     existing_endpoints = []
     for (key, uuid) in sdn.device_map
-        if key[1] == node_id && string(key[2]) |> x -> startswith(x, prefix)
+        if length(key) == 3 && key[1] == sorted_nodes[1] && key[2] == sorted_nodes[2] && 
+           string(key[3]) |> x -> startswith(x, "shared_ols_ep_")
             push!(existing_endpoints, (key, uuid))
         end
     end
@@ -186,18 +259,11 @@ function get_available_endpoint(sdn::TeraflowSDN, node_id::Int, prefix::String)
         end
     end
     
-    error("No available $prefix endpoint for node $node_id. Not enough endpoints were pre-created!")
-end
-
-function get_available_oxc_endpoint(sdn::TeraflowSDN, node_id::Int)
-    return get_available_endpoint(sdn, node_id, "oxc_ep_")
-end
-
-function get_available_ols_endpoint(sdn::TeraflowSDN, node_id::Int)
-    return get_available_endpoint(sdn, node_id, "ols_ep_")
+    error("No available shared OLS endpoint for nodes $node1_id ↔ $node2_id")
 end
 
 function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
+
 
     node_id = nodeview.nodeproperties.localnode
 
@@ -244,9 +310,10 @@ function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
 
     # ───────────────────────── OXC ───────────────────────────────────────────
     if nodeview.oxcview !== nothing
-        # Create fixed number of fiber endpoints for OXC (4 endpoints)
-        endpoint_uuids = create_oxc_endpoints(sdn, node_id, 4)
-        println("  [OXC $node_id] Created 4 fiber endpoints before posting device")
+        # Calculate and create variable number of fiber endpoints for OXC based on neighbors
+        n_eps = oxc_endpoints_needed(nodeview)
+        endpoint_uuids = create_oxc_endpoints(sdn, node_id, n_eps)
+        println("  [OXC $node_id] Created $n_eps fiber endpoints before posting device")
 
         key  = (node_id, :oxc)
         uuid = get!(sdn.device_map, key) do
@@ -272,7 +339,7 @@ function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
                     "emu-optical-roadm",
                     Ctx.DeviceConfig([ep_rule]),
                     Ctx.DeviceOperationalStatusEnum.DEVICEOPERATIONALSTATUS_ENABLED,
-                    device_drivers,  # Use the properly constructed array
+                    device_drivers,
                     Ctx.EndPoint[], Ctx.Component[], nothing)
 
         if ensure_post_device(sdn.api_url, dev)
@@ -283,59 +350,19 @@ function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
         end
     end
 
-    # ───────────────────────── OLS (New Device) ──────────────────────────────
-    # Calculate and create variable number of fiber endpoints for OLS
-    n_eps = ols_endpoints_needed(nodeview)
-    endpoint_uuids = create_ols_endpoints(sdn, node_id, n_eps)
-    println("  [OLS $node_id] Created $n_eps fiber endpoints before posting device")
-
-    key  = (node_id, :ols)
-    uuid = get!(sdn.device_map, key) do
-        stable_uuid(node_id, :ols)
-    end
-
-    endpoints_config = []
-    for (i, ep_uuid) in enumerate(endpoint_uuids)
-        push!(endpoints_config, Dict("sample_types"=>Any[],
-                                    "type"=>"fiber",
-                                    "uuid"=>ep_uuid,
-                                    "name"=>"ols_ep_$(i)_node_$(node_id)"))
-    end
-
-    ep_rule = _custom_rule("_connect/settings", Dict("endpoints" => endpoints_config))
-
-    device_drivers = Vector{Ctx.DeviceDriverEnum.T}()
-    push!(device_drivers, Ctx.DeviceDriverEnum.DEVICEDRIVER_UNDEFINED)
-
-    dev  = Ctx.Device(
-                Ctx.DeviceId(Ctx.Uuid(uuid)),
-                "OLS-Node-$(node_id)",
-                "emu-open-line-system",  # New device type
-                Ctx.DeviceConfig([ep_rule]),
-                Ctx.DeviceOperationalStatusEnum.DEVICEOPERATIONALSTATUS_ENABLED,
-                device_drivers,
-                Ctx.EndPoint[], Ctx.Component[], nothing)
-
-    if ensure_post_device(sdn.api_url, dev)
-        # OLS doesn't have specific config rules for now, but we can add them later
-        println("✓ OLS device $uuid created successfully")
-    else
-        @warn "OLS device $uuid could not be created/updated"
-    end
+    # Remove OLS creation from individual nodes - it will be created during inter-node linking
 
     # ─────────────────────── Transmission Modules ───────────────────────────
     if nodeview.transmissionmoduleviewpool !== nothing
         for (idx, tmview) in enumerate(nodeview.transmissionmoduleviewpool)
-            key  = (node_id, Symbol("tm_$idx"))             # Fixed: use Symbol instead of tuple
+            key  = (node_id, Symbol("tm_$idx"))
             uuid = get!(sdn.device_map, key) do
-                    # include pool-index → stable & unique
                     stable_uuid(node_id * 10_000 + idx, :tm)
                 end
 
             # Create 4 endpoints for TM (2 copper + 2 fiber)
             endpoint_uuids = create_tm_endpoints(sdn, node_id, idx)
 
-            # Build endpoints config with mixed types
             endpoints_config = []
             for i in 1:2  # First 2 are copper
                 ep_uuid = endpoint_uuids[i]
@@ -755,158 +782,209 @@ function create_tm_oxc_link(sdn::TeraflowSDN, node_id::Int; link_type::Symbol = 
         end
     end
     
-    return success_count == 2  # Both links should succeed
+    return success_count == 2
 end
 
+# Remove create_oxc_ols_link function as OLS is no longer per-node
+
+# Update inter-node linking to create shared OLS and connect OXCs to it
 """
-    create_oxc_ols_link(sdn::TeraFlowSDN, node_id::Int) → Bool
-Create intra-node link between OXC and OLS using fiber endpoints.
-OXC ep3 ↔ OLS ep1, OXC ep4 ↔ OLS ep2
+    create_inter_node_connection_with_shared_ols(sdn::TeraflowSDN, node1_id::Int, node2_id::Int) → Bool
+Create inter-node connection with shared OLS device.
+Creates shared OLS between two nodes and connects each node's OXC to it with 2 links each (if OXC exists).
 """
-function create_oxc_ols_link(sdn::TeraflowSDN, node_id::Int; link_type::Symbol = :fiber)
-    success_count = 0
+function create_inter_node_connection_with_shared_ols(sdn::TeraflowSDN, node1_id::Int, node2_id::Int; link_type::Symbol = :fiber)
+    println("🌉 Creating inter-node connection with shared OLS: $node1_id ↔ $node2_id")
     
-    # Create two links: OXC ep3 ↔ OLS ep1, OXC ep4 ↔ OLS ep2
-    for ep_pair in [(3, 1), (4, 2)]
-        oxc_ep_idx, ols_ep_idx = ep_pair
-        
-        oxc_ep_key = (node_id, Symbol("oxc_ep_$(oxc_ep_idx)"))
-        ols_ep_key = (node_id, Symbol("ols_ep_$(ols_ep_idx)"))
-        
-        if !haskey(sdn.device_map, oxc_ep_key)
-            @warn "OXC endpoint not found: $oxc_ep_key"
-            continue
-        end
-        
-        if !haskey(sdn.device_map, ols_ep_key)
-            @warn "OLS endpoint not found: $ols_ep_key"
-            continue
-        end
-        
-        oxc_ep_uuid = sdn.device_map[oxc_ep_key]
-        ols_ep_uuid = sdn.device_map[ols_ep_key]
-        
-        # Check if already used
-        if get(sdn.endpoint_usage, oxc_ep_uuid, false) || get(sdn.endpoint_usage, ols_ep_uuid, false)
-            @warn "Endpoints already in use for oxc-ols link: $oxc_ep_key ↔ $ols_ep_key"
-            continue
-        end
-        
-        # Generate link details
-        link_uuid = stable_uuid(node_id * 300 + ep_pair[1], Symbol("oxc_ols_link_$(ep_pair[1])"))
-        link_name = "IntraLink-OXC-ep$(oxc_ep_idx)-OLS-ep$(ols_ep_idx)-node-$(node_id)"
-        link_key = (node_id, Symbol("oxc_ols_link_$(ep_pair[1])"))
-        
-        # Store in intra-link map
-        sdn.intra_link_map[link_key] = link_uuid
-        
-        # Create the link
-        success = create_link_between_devices(sdn, oxc_ep_key, ols_ep_key,
-                                            link_name, link_uuid; link_type=link_type)
-        
-        if success
-            # Mark endpoints as used
-            sdn.endpoint_usage[oxc_ep_uuid] = true
-            sdn.endpoint_usage[ols_ep_uuid] = true
-            success_count += 1
-            println("✓ Created OXC-OLS link: OXC-ep$(oxc_ep_idx) ↔ OLS-ep$(ols_ep_idx) (node $node_id)")
-        else
-            @warn "✗ Failed to create OXC-OLS link for endpoints $(ep_pair) (node $node_id)"
-        end
+    # Check if nodes have OXC
+    node1_has_oxc = haskey(sdn.device_map, (node1_id, :oxc))
+    node2_has_oxc = haskey(sdn.device_map, (node2_id, :oxc))
+    
+    # Create shared OLS device
+    ols_uuid, ols_endpoints = create_shared_ols_device(sdn, node1_id, node2_id)
+    if ols_uuid === nothing
+        @warn "Failed to create shared OLS device for nodes $node1_id ↔ $node2_id"
+        return false
     end
     
-    return success_count == 2  # Both links should succeed
-end
-
-"""
-    create_inter_node_ols_link(sdn::TeraFlowSDN, node1_id::Int, node2_id::Int) → Bool
-Create bi-directional inter-node links between two OLS devices.
-Creates 2 links: node1→node2 (outgoing) and node2→node1 (incoming)
-"""
-function create_inter_node_ols_link(sdn::TeraflowSDN, node1_id::Int, node2_id::Int; link_type::Symbol = :fiber)
     success_count = 0
+    sorted_nodes = sort([node1_id, node2_id])
     
-    # Create 2 unidirectional links: node1→node2 and node2→node1
-    for direction in [:outgoing, :incoming]
-        # Determine source and destination based on direction
-        if direction == :outgoing
-            src_node, dst_node = node1_id, node2_id
-            direction_label = "$(node1_id)→$(node2_id)"
-        else
-            src_node, dst_node = node2_id, node1_id
-            direction_label = "$(node2_id)→$(node1_id)"
-        end
-        
-        # Get available endpoints from both nodes
-        try
-            src_ep_key, src_ep_uuid = get_available_ols_endpoint(sdn, src_node)
-            dst_ep_key, dst_ep_uuid = get_available_ols_endpoint(sdn, dst_node)
-            
-            # Generate stable UUID and naming
-            # Use different multipliers for each direction to ensure unique UUIDs
-            direction_multiplier = direction == :outgoing ? 1 : 2
-            sorted_nodes = sort([src_node, dst_node])
-            link_uuid = stable_uuid(sorted_nodes[1] * 10000 + sorted_nodes[2] * 10 + direction_multiplier, 
-                                  Symbol("ols_inter_link_$(direction)"))
-            
-            # Extract endpoint IDs from keys for naming
-            src_ep_id = string(src_ep_key[2])  # e.g., "ols_ep_3"
-            dst_ep_id = string(dst_ep_key[2])  # e.g., "ols_ep_4"
-            
-            link_name = "InterLink-$(direction_label)-$(src_ep_id)-node-$(src_node)-$(dst_ep_id)-node-$(dst_node)"
-            
-            # Create link key for inter-link map: (src_node, src_ep_id, dst_node, dst_ep_id, :link, direction)
-            link_key = (src_node, src_ep_id, dst_node, dst_ep_id, :link, direction)
-            
-            # Check if this specific link already exists
-            if haskey(sdn.inter_link_map, link_key)
-                println("⏭️  Link already exists: $direction_label")
-                success_count += 1
-                continue
+    # Connect node1's OXC to shared OLS (2 links) - only if node1 has OXC
+    if node1_has_oxc
+        for ep_idx in 1:2
+            try
+                # Get available OXC endpoint from node1
+                oxc_ep_key, oxc_ep_uuid = get_available_oxc_endpoint(sdn, node1_id)
+                
+                # Get available shared OLS endpoint
+                ols_ep_key, ols_ep_uuid = get_available_shared_ols_endpoint(sdn, node1_id, node2_id)
+                
+                # Generate link details
+                link_uuid = stable_uuid(sorted_nodes[1] * 10000 + sorted_nodes[2] * 100 + ep_idx, 
+                                      Symbol("oxc_sharedols_link_node$(node1_id)_ep$(ep_idx)"))
+                
+                oxc_ep_id = string(oxc_ep_key[2])
+                ols_ep_id = string(ols_ep_key[3])
+                link_name = "InterLink-OXC-$(oxc_ep_id)-node-$(node1_id)-SharedOLS-$(ols_ep_id)-nodes-$(sorted_nodes[1])-$(sorted_nodes[2])"
+                
+                # Create link key for inter-link map
+                link_key = (node1_id, oxc_ep_id, sorted_nodes[1], sorted_nodes[2], ols_ep_id, :shared_ols_link)
+                
+                # Store in inter-link map
+                sdn.inter_link_map[link_key] = link_uuid
+                
+                # Create the actual link
+                success = create_link_between_devices_shared_ols(sdn, oxc_ep_key, ols_ep_key,
+                                                              link_name, link_uuid; link_type=link_type)
+                
+                if success
+                    # Mark endpoints as used
+                    sdn.endpoint_usage[oxc_ep_uuid] = true
+                    sdn.endpoint_usage[ols_ep_uuid] = true
+                    success_count += 1
+                    println("✓ Connected OXC node $node1_id ($(oxc_ep_id)) to shared OLS ($(ols_ep_id))")
+                else
+                    delete!(sdn.inter_link_map, link_key)
+                    @warn "✗ Failed to connect OXC node $node1_id to shared OLS"
+                end
+                
+            catch e
+                @warn "✗ Failed to get available endpoints for node $node1_id: $e"
             end
-            
-            # Store in inter-link map
-            sdn.inter_link_map[link_key] = link_uuid
-            
-            # Create the actual link
-            success = create_link_between_devices(sdn, src_ep_key, dst_ep_key,
-                                                link_name, link_uuid; link_type=link_type)
-            
-            if success
-                # Mark endpoints as used
-                sdn.endpoint_usage[src_ep_uuid] = true
-                sdn.endpoint_usage[dst_ep_uuid] = true
-                success_count += 1
-                println("✓ Created inter-node link ($direction): $(src_ep_id)-node-$(src_node) → $(dst_ep_id)-node-$(dst_node)")
-            else
-                # Revert on failure
-                delete!(sdn.inter_link_map, link_key)
-                @warn "✗ Failed to create inter-node link ($direction): $src_node → $dst_node"
-            end
-            
-        catch e
-            @warn "✗ Failed to get available endpoints for $direction_label: $e"
         end
+    else
+        println("⚠️  Node $node1_id has no OXC device - shared OLS created for future connection")
     end
     
-    return success_count == 2  # Both directions should succeed
+    # Connect node2's OXC to shared OLS (2 links) - only if node2 has OXC
+    if node2_has_oxc
+        for ep_idx in 1:2
+            try
+                # Get available OXC endpoint from node2
+                oxc_ep_key, oxc_ep_uuid = get_available_oxc_endpoint(sdn, node2_id)
+                
+                # Get available shared OLS endpoint
+                ols_ep_key, ols_ep_uuid = get_available_shared_ols_endpoint(sdn, node1_id, node2_id)
+                
+                # Generate link details
+                link_uuid = stable_uuid(sorted_nodes[1] * 10000 + sorted_nodes[2] * 100 + ep_idx + 10, 
+                                      Symbol("oxc_sharedols_link_node$(node2_id)_ep$(ep_idx)"))
+                
+                oxc_ep_id = string(oxc_ep_key[2])
+                ols_ep_id = string(ols_ep_key[3])
+                link_name = "InterLink-OXC-$(oxc_ep_id)-node-$(node2_id)-SharedOLS-$(ols_ep_id)-nodes-$(sorted_nodes[1])-$(sorted_nodes[2])"
+                
+                # Create link key for inter-link map
+                link_key = (node2_id, oxc_ep_id, sorted_nodes[1], sorted_nodes[2], ols_ep_id, :shared_ols_link)
+                
+                # Store in inter-link map
+                sdn.inter_link_map[link_key] = link_uuid
+                
+                # Create the actual link
+                success = create_link_between_devices_shared_ols(sdn, oxc_ep_key, ols_ep_key,
+                                                              link_name, link_uuid; link_type=link_type)
+                
+                if success
+                    # Mark endpoints as used
+                    sdn.endpoint_usage[oxc_ep_uuid] = true
+                    sdn.endpoint_usage[ols_ep_uuid] = true
+                    success_count += 1
+                    println("✓ Connected OXC node $node2_id ($(oxc_ep_id)) to shared OLS ($(ols_ep_id))")
+                else
+                    delete!(sdn.inter_link_map, link_key)
+                    @warn "✗ Failed to connect OXC node $node2_id to shared OLS"
+                end
+                
+            catch e
+                @warn "✗ Failed to get available endpoints for node $node2_id: $e"
+            end
+        end
+    else
+        println("⚠️  Node $node2_id has no OXC device - shared OLS created for future connection")
+    end
+    
+    # Expected success count depends on how many nodes have OXC
+    expected_links = (node1_has_oxc ? 2 : 0) + (node2_has_oxc ? 2 : 0)
+    return success_count == expected_links
 end
 
+# Add helper function for shared OLS linking
+function create_link_between_devices_shared_ols(sdn::TeraflowSDN, oxc_ep_key::Tuple, ols_ep_key::Tuple,
+                                               link_name::String, link_uuid::String;
+                                               link_type::Symbol = :fiber)
+    
+    if !haskey(sdn.device_map, oxc_ep_key)
+        @warn "OXC endpoint not found: $oxc_ep_key"
+        return false
+    end
+    
+    if !haskey(sdn.device_map, ols_ep_key)
+        @warn "Shared OLS endpoint not found: $ols_ep_key"
+        return false
+    end
+    
+    oxc_ep_uuid = sdn.device_map[oxc_ep_key]
+    ols_ep_uuid = sdn.device_map[ols_ep_key]
+    
+    # Get OXC device UUID
+    node_id = oxc_ep_key[1]
+    oxc_device_key = (node_id, :oxc)
+    if !haskey(sdn.device_map, oxc_device_key)
+        @warn "OXC device not found: $oxc_device_key"
+        return false
+    end
+    oxc_device_uuid = sdn.device_map[oxc_device_key]
+    
+    # Get shared OLS device UUID
+    ols_device_key = (ols_ep_key[1], ols_ep_key[2], :shared_ols)
+    if !haskey(sdn.device_map, ols_device_key)
+        @warn "Shared OLS device not found: $ols_device_key"
+        return false
+    end
+    ols_device_uuid = sdn.device_map[ols_device_key]
+    
+    # Create EndPointIds
+    endpoint_ids = [
+        Ctx.EndPointId(
+            nothing,
+            Ctx.DeviceId(Ctx.Uuid(oxc_device_uuid)),
+            Ctx.Uuid(oxc_ep_uuid)
+        ),
+        Ctx.EndPointId(
+            nothing,
+            Ctx.DeviceId(Ctx.Uuid(ols_device_uuid)),
+            Ctx.Uuid(ols_ep_uuid)
+        )
+    ]
+    
+    # Create link
+    link = Ctx.Link(
+        Ctx.LinkId(Ctx.Uuid(link_uuid)),
+        link_name,
+        Ctx.LinkTypeEnum.LINKTYPE_FIBER,
+        endpoint_ids,
+        Ctx.LinkAttributes(0.0f0, 0.0f0)
+    )
+    
+    return ensure_post_link(sdn.api_url, link)
+end
+
+# Update intra-node connection function to only do Router ↔ TM ↔ OXC
 """
     connect_all_intra_node_devices(sdn::TeraflowSDN) → Int
 Create all intra-node connections in the correct order:
 1. Router ↔ TM1 (copper)
 2. TM1 ↔ OXC (fiber) 
-3. OXC ↔ OLS (fiber)
+Note: OXC ↔ OLS connections are now handled in inter-node linking with shared OLS
 """
 function connect_all_intra_node_devices(sdn::TeraflowSDN)
     links_created = 0
     
-    # Find nodes with complete device sets (router, tm, oxc, ols)
+    # Find nodes with complete device sets (router, tm, oxc)
     nodes_with_router = Set{Int}()
     nodes_with_tm = Set{Int}()
     nodes_with_oxc = Set{Int}()
-    nodes_with_ols = Set{Int}()
     
     for (key, uuid) in sdn.device_map
         if string(key[2]) |> x -> startswith(x, "router_ep_")
@@ -915,12 +993,10 @@ function connect_all_intra_node_devices(sdn::TeraflowSDN)
             push!(nodes_with_tm, key[1])
         elseif key[2] == :oxc
             push!(nodes_with_oxc, key[1])
-        elseif key[2] == :ols
-            push!(nodes_with_ols, key[1])
         end
     end
     
-    nodes_for_connection = intersect(nodes_with_router, nodes_with_tm, nodes_with_oxc, nodes_with_ols)
+    nodes_for_connection = intersect(nodes_with_router, nodes_with_tm, nodes_with_oxc)
     
     println("🔗 Found $(length(nodes_for_connection)) nodes for complete intra-node connections")
     
@@ -937,10 +1013,7 @@ function connect_all_intra_node_devices(sdn::TeraflowSDN)
             links_created += 2  # Two links created
         end
         
-        # Step 3: OXC ↔ OLS (fiber)
-        if create_oxc_ols_link(sdn, node_id; link_type=:fiber)
-            links_created += 2  # Two links created
-        end
+        # Note: OXC ↔ OLS connections are now handled in inter-node linking
     end
     
     println("✅ Created $links_created total intra-node links")
@@ -948,22 +1021,28 @@ function connect_all_intra_node_devices(sdn::TeraflowSDN)
 end
 
 """
-    connect_all_ols_inter_node(sdn::TeraFlowSDN, nodeviews) → Int
-Create all inter-node OLS connections based on topology.
-Each connection creates 2 unidirectional links (incoming + outgoing).
+    connect_all_inter_node_with_shared_ols(sdn::TeraflowSDN, nodeviews) → Int
+Create all inter-node connections with shared OLS devices.
+Creates shared OLS for all node pairs, but only creates links for nodes that have OXC devices.
 """
-function connect_all_ols_inter_node(sdn::TeraflowSDN, nodeviews)
+function connect_all_inter_node_with_shared_ols(sdn::TeraflowSDN, nodeviews)
     links_created = 0
     
-    # Get all nodes that have OLS devices
-    ols_nodes = Set{Int}()
+    # Get all nodes that have OXC devices
+    oxc_nodes = Set{Int}()
     for (key, uuid) in sdn.device_map
-        if key[2] == :ols
-            push!(ols_nodes, key[1])
+        if length(key) == 2 && key[2] == :oxc
+            push!(oxc_nodes, key[1])
         end
     end
     
-    println("🌐 Found $(length(ols_nodes)) nodes with OLS devices")
+    # Get all nodes (including those without OXC)
+    all_nodes = Set{Int}()
+    for nodeview in nodeviews
+        push!(all_nodes, nodeview.nodeproperties.localnode)
+    end
+    
+    println("🌐 Found $(length(oxc_nodes)) nodes with OXC devices out of $(length(all_nodes)) total nodes")
     
     # Track processed node pairs to avoid duplicates
     processed_pairs = Set{Tuple{Int,Int}}()
@@ -971,173 +1050,62 @@ function connect_all_ols_inter_node(sdn::TeraflowSDN, nodeviews)
     for nodeview in nodeviews
         node_id = nodeview.nodeproperties.localnode
         
-        if node_id in ols_nodes
-            # Get all neighbors
-            all_neighbors = Set{Int}()
-            union!(all_neighbors, nodeview.nodeproperties.inneighbors)
-            union!(all_neighbors, nodeview.nodeproperties.outneighbors)
-            
-            for neighbor_id in all_neighbors
-                if neighbor_id in ols_nodes
-                    # Create ordered pair to avoid duplicates
-                    link_pair = node_id < neighbor_id ? (node_id, neighbor_id) : (neighbor_id, node_id)
+        # Get all neighbors for this node (regardless of whether it has OXC)
+        all_neighbors = Set{Int}()
+        union!(all_neighbors, nodeview.nodeproperties.inneighbors)
+        union!(all_neighbors, nodeview.nodeproperties.outneighbors)
+        
+        for neighbor_id in all_neighbors
+            if neighbor_id in all_nodes  # Make sure neighbor exists in our nodeviews
+                # Create ordered pair to avoid duplicates
+                link_pair = node_id < neighbor_id ? (node_id, neighbor_id) : (neighbor_id, node_id)
+                
+                if link_pair ∉ processed_pairs
+                    push!(processed_pairs, link_pair)
                     
-                    if link_pair ∉ processed_pairs
-                        push!(processed_pairs, link_pair)
-                        
-                        # Check if links already exist in device map
-                        existing_outgoing_key = nothing
-                        existing_incoming_key = nothing
-                        
-                        for key in keys(sdn.inter_link_map)
-                            if length(key) >= 6
-                                if key[1] == link_pair[1] && key[3] == link_pair[2] && key[6] == :outgoing
-                                    existing_outgoing_key = key
-                                elseif key[1] == link_pair[2] && key[3] == link_pair[1] && key[6] == :incoming
-                                    existing_incoming_key = key
-                                end
-                            end
+                    # Check if both nodes have OXC devices
+                    node1_has_oxc = link_pair[1] in oxc_nodes
+                    node2_has_oxc = link_pair[2] in oxc_nodes
+                    
+                    if node1_has_oxc || node2_has_oxc
+                        # At least one node has OXC, proceed with connection
+                        # But modify the existing function to handle missing OXC gracefully
+                        if create_inter_node_connection_with_shared_ols(sdn, link_pair[1], link_pair[2]; link_type=:fiber)
+                            expected_links = (node1_has_oxc ? 2 : 0) + (node2_has_oxc ? 2 : 0)
+                            links_created += expected_links
                         end
-                        
-                        if existing_outgoing_key !== nothing && existing_incoming_key !== nothing
-                            # Links exist in map - reuse existing info to post to TFS
-                            println("📋 Reposting existing links: $(link_pair[1]) ↔ $(link_pair[2])...")
-                            
-                            # Post outgoing link using existing data
-                            outgoing_uuid = sdn.inter_link_map[existing_outgoing_key]
-                            src_node, src_ep_id, dst_node, dst_ep_id = existing_outgoing_key[1], existing_outgoing_key[2], existing_outgoing_key[3], existing_outgoing_key[4]
-                            src_ep_key = (src_node, Symbol(src_ep_id))
-                            dst_ep_key = (dst_node, Symbol(dst_ep_id))
-                            link_name = "InterLink-$(src_node)→$(dst_node)-$(src_ep_id)-node-$(src_node)-$(dst_ep_id)-node-$(dst_node)"
-                            
-                            if create_link_between_devices(sdn, src_ep_key, dst_ep_key, link_name, outgoing_uuid; link_type=:fiber)
-                                links_created += 1
-                            end
-                            
-                            # Post incoming link using existing data
-                            incoming_uuid = sdn.inter_link_map[existing_incoming_key]
-                            src_node, src_ep_id, dst_node, dst_ep_id = existing_incoming_key[1], existing_incoming_key[2], existing_incoming_key[3], existing_incoming_key[4]
-                            src_ep_key = (src_node, Symbol(src_ep_id))
-                            dst_ep_key = (dst_node, Symbol(dst_ep_id))
-                            link_name = "InterLink-$(src_node)→$(dst_node)-$(src_ep_id)-node-$(src_node)-$(dst_ep_id)-node-$(dst_node)"
-                            
-                            if create_link_between_devices(sdn, src_ep_key, dst_ep_key, link_name, incoming_uuid; link_type=:fiber)
-                                links_created += 1
-                            end
-                        else
-                            # Links don't exist in map - create new ones
-                            println("🌉 Creating new inter-node connection: $(link_pair[1]) ↔ $(link_pair[2])...")
-                            if create_inter_node_ols_link(sdn, link_pair[1], link_pair[2]; link_type=:fiber)
-                                links_created += 2  # 2 unidirectional links created
-                            end
-                        end
+                    else
+                        # Neither node has OXC, just create the shared OLS device for future use
+                        println("🔧 Creating shared OLS for future use: $(link_pair[1]) ↔ $(link_pair[2]) (no OXC devices)")
+                        create_shared_ols_device(sdn, link_pair[1], link_pair[2])
                     end
                 end
             end
         end
     end
     
-    println("✅ Created/reposted $links_created inter-node links")
+    println("✅ Created $links_created inter-node links with shared OLS devices")
     return links_created
-end
-
-function print_link_status(sdn::TeraflowSDN)
-    println("\n" * "="^80)
-    println("🔗 NETWORK LINK STATUS")
-    println("="^80)
-    
-    # Intra-node links
-    println("\n📍 INTRA-NODE LINKS ($(length(sdn.intra_link_map)))")
-    println("-"^50)
-    for (key, uuid) in sort(collect(sdn.intra_link_map))
-        node_id, link_type = key
-        if string(link_type) |> x -> startswith(x, "router_tm_link")
-            println("  Node $node_id: Router ↔ TM1 ($link_type)")
-        elseif string(link_type) |> x -> startswith(x, "tm_oxc_link")
-            println("  Node $node_id: TM1 ↔ OXC ($link_type)")
-        elseif string(link_type) |> x -> startswith(x, "oxc_ols_link")
-            println("  Node $node_id: OXC ↔ OLS ($link_type)")
-        else
-            println("  Node $node_id: $link_type ($uuid)")
-        end
-    end
-    
-    # Inter-node links  
-    println("\n🌐 INTER-NODE LINKS ($(length(sdn.inter_link_map)))")
-    println("-"^70)
-    for (key, uuid) in sort(collect(sdn.inter_link_map))
-        node1, ep1, node2, ep2, _, direction = key
-        println("  $ep1-node-$node1 ↔ $ep2-node-$node2 [$direction] ($uuid)")
-    end
-    
-    # Endpoint usage
-    println("\n📡 ENDPOINT USAGE")
-    println("-"^40)
-    used_count = count(values(sdn.endpoint_usage))
-    total_count = length(sdn.endpoint_usage)
-    println("  Used: $used_count / $total_count endpoints")
-    
-    # Show used endpoints by node and device type
-    for node_id in sort(unique([k[1] for k in keys(sdn.device_map)]))
-        # Router endpoints
-        router_eps = [(k, v) for (k, v) in sdn.device_map if k[1] == node_id && string(k[2]) |> x -> startswith(x, "router_ep_")]
-        if !isempty(router_eps)
-            used_router_eps = [k[2] for (k, uuid) in router_eps if get(sdn.endpoint_usage, uuid, false)]
-            total_router_eps = length(router_eps)
-            println("    Node $node_id Router: $(length(used_router_eps))/$total_router_eps used $(used_router_eps)")
-        end
-        
-        # TM endpoints
-        tm_eps = [(k, v) for (k, v) in sdn.device_map if k[1] == node_id && string(k[2]) |> x -> startswith(x, "tm_1_")]
-        if !isempty(tm_eps)
-            used_tm_eps = [k[2] for (k, uuid) in tm_eps if get(sdn.endpoint_usage, uuid, false)]
-            total_tm_eps = length(tm_eps)
-            println("    Node $node_id TM1: $(length(used_tm_eps))/$total_tm_eps used $(used_tm_eps)")
-        end
-        
-        # OXC endpoints
-        oxc_eps = [(k, v) for (k, v) in sdn.device_map if k[1] == node_id && string(k[2]) |> x -> startswith(x, "oxc_ep_")]
-        if !isempty(oxc_eps)
-            used_oxc_eps = [k[2] for (k, uuid) in oxc_eps if get(sdn.endpoint_usage, uuid, false)]
-            total_oxc_eps = length(oxc_eps)
-            println("    Node $node_id OXC: $(length(used_oxc_eps))/$total_oxc_eps used $(used_oxc_eps)")
-        end
-        
-        # OLS endpoints
-        ols_eps = [(k, v) for (k, v) in sdn.device_map if k[1] == node_id && string(k[2]) |> x -> startswith(x, "ols_ep_")]
-        if !isempty(ols_eps)
-            used_ols_eps = [k[2] for (k, uuid) in ols_eps if get(sdn.endpoint_usage, uuid, false)]
-            total_ols_eps = length(ols_eps)
-            println("    Node $node_id OLS: $(length(used_ols_eps))/$total_ols_eps used $(used_ols_eps)")
-        end
-    end
-    
-    println("="^80)
 end
 
 """
     create_all_network_links(sdn::TeraFlowSDN, nodeviews) → Tuple{Int, Int}
 
 Complete network linking function that:
-1. Creates all intra-node connections: Router ↔ TM1 ↔ OXC ↔ OLS
-2. Creates all inter-node OLS-OLS links based on network topology
-Takes nodeviews directly to avoid MINDFul dependency in TFS module.
-Returns (intra_links_processed, inter_links_processed)
+1. Creates all intra-node connections: Router ↔ TM1 ↔ OXC
+2. Creates all inter-node connections with shared OLS devices between OXC pairs
 """
 function create_all_network_links(sdn::TeraflowSDN, nodeviews)
     println("\n🔧 CREATING ALL NETWORK LINKS")
     println("="^50)
     
-    # Phase 1: Intra-node links (Router ↔ TM1 ↔ OXC ↔ OLS)
+    # Phase 1: Intra-node links (Router ↔ TM1 ↔ OXC)
     println("\n📍 Phase 1: Intra-Node Links")
     intra_links = connect_all_intra_node_devices(sdn)
     
-    # Phase 2: Inter-node links (OLS ↔ OLS)
-    println("\n🌐 Phase 2: Inter-Node Links")
-    inter_links = connect_all_ols_inter_node(sdn, nodeviews)
-    
-    # Show final status
-    print_link_status(sdn)
+    # Phase 2: Inter-node links with shared OLS (OXC ↔ SharedOLS ↔ OXC)
+    println("\n🌐 Phase 2: Inter-Node Links with Shared OLS")
+    inter_links = connect_all_inter_node_with_shared_ols(sdn, nodeviews)
     
     return (intra_links, inter_links)
 end

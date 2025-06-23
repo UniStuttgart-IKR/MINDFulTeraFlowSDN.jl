@@ -13,10 +13,10 @@ export TeraflowSDN, OneOf, Ctx,
        print_device, add_config_rule!, post_context, post_topology_minimal,
        push_node_devices_to_tfs, post_device, ensure_post_device,
        get_links, get_link, post_link, ensure_post_link,
-       connect_all_intra_node_devices, connect_all_ols_inter_node, create_all_network_links,
+       connect_all_intra_node_devices, connect_all_inter_node_with_shared_ols, create_all_network_links,
        save_device_map, load_device_map!, stable_uuid,
-       create_router_tm_link, create_tm_oxc_link, create_oxc_ols_link, create_inter_node_ols_link,
-       create_all_network_links, calculate_ols_endpoint_needs, create_ols_endpoints,
+       create_router_tm_link, create_tm_oxc_link, create_inter_node_connection_with_shared_ols,
+       create_all_network_links, calculate_oxc_endpoint_needs, create_shared_ols_device,
        print_link_status
 
 # 4. Include sub-modules (order matters)
