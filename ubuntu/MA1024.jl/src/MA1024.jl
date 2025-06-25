@@ -16,8 +16,7 @@ export TeraflowSDN, OneOf, Ctx,
        connect_all_intra_node_devices, connect_all_inter_node_with_shared_ols, create_all_network_links,
        save_device_map, load_device_map!, stable_uuid,
        create_router_tm_link, create_tm_oxc_link, create_inter_node_connection_with_shared_ols,
-       create_all_network_links, calculate_oxc_endpoint_needs, create_shared_ols_device,
-       print_link_status
+       calculate_oxc_endpoint_needs, create_shared_ols_device
 
 # 4. Include sub-modules (order matters)
 include("api/api.jl")
