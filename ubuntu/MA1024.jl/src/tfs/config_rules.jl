@@ -118,7 +118,7 @@ function build_config_rules(rv::MINDFul.RouterView)
         push!(rules, _custom_rule(
             "/interfaces/interface/$ifname",
             Dict(
-                "config" => Dict("name" => ifname, "enabled" => true),
+                "config" => Dict("name" => ifname, "enabled" => false),
                 "ethernet" => Dict(
                     "config" => Dict("port-speed" => _to_speed_enum(p.rate))
                 )
@@ -126,8 +126,17 @@ function build_config_rules(rv::MINDFul.RouterView)
         ))
     end
 
-    append!(rules, _rules_from_table("/portreservations", rv.portreservations))
-    append!(rules, _rules_from_table("/portstaged",       rv.portstaged))
+    # Now go through port reservations and enable the reserved ports
+    for (uuid, lli) in rv.portreservations
+        # Router port indices are typically 1-based, convert to interface name
+        ifname = "eth$(lli.routerportindex)"
+        
+        # Override the enabled status for this specific port
+        push!(rules, _custom_rule(
+            "/interfaces/interface/$ifname/config",
+            Dict("enabled" => true)
+        ))
+    end
 
     return rules
 end
