@@ -83,7 +83,7 @@ function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
                     Ctx.EndPoint[], Ctx.Component[], nothing)
 
         if ensure_post_device(sdn.api_url, dev)
-            rules = build_config_rules(nodeview.oxcview)
+            rules = build_config_rules(nodeview.oxcview, nodeview)  # Pass both oxcview and nodeview
             _push_rules(sdn.api_url, uuid, rules; kind=:OXC)
         else
             @warn "OXC device $uuid could not be created/updated"
