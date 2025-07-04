@@ -328,14 +328,133 @@ function build_config_rules(oxc::MINDFul.OXCView, nodeview::MINDFul.NodeView)
 end
 
 # ───────── TransmissionModuleView ─────────────────────────────────────────
-function build_config_rules(tm::MINDFul.TransmissionModuleView; ep_uuid::Union{String,Nothing}=nothing)
+function build_config_rules(tm::MINDFul.TransmissionModuleView)
     rules = Ctx.ConfigRule[]
-    push!(rules, _custom_rule("/transmissionmodule", string(typeof(tm.transmissionmodule))))
-    push!(rules, _custom_rule("/name",               tm.name))
-    push!(rules, _custom_rule("/cost",               tm.cost))
-
+    
+    # Get the module name from the transmissionmodule type
+    module_name = string(typeof(tm.transmissionmodule))
+    
+    # Create the component entry for this transmission module
+    push!(rules, _custom_rule(
+        "/components/component/$(module_name)/config",
+        Dict(
+            "name" => module_name
+        )
+    ))
+    
+    # Set the transmission module status (disabled by default)
+    push!(rules, _custom_rule(
+        "/components/component/$(module_name)/transceiver/config/enabled",
+        false
+    ))
+    
+    # Set the description (name field)
+    push!(rules, _custom_rule(
+        "/components/component/$(module_name)/config/description",
+        tm.name
+    ))
+    
+    # Store supported transmission modes as a property
+    supported_modes = [string(i) for i in 1:length(tm.transmissionmodes)]
+    push!(rules, _custom_rule(
+        "/components/component/$(module_name)/properties/property/SUPPORTED_MODES/config",
+        Dict(
+            "name" => "SUPPORTED_MODES",
+            "value" => join(supported_modes, ",")  # CSV format
+        )
+    ))
+    
+    # Create properties for each transmission mode
     for (idx, mode) in enumerate(tm.transmissionmodes)
-        push!(rules, _custom_rule("/transmissionmodes/$idx", _jsonify(mode)))
+        mode_prefix = "MODE_$(idx)"
+        
+        # Add enabled property for this mode (disabled by default)
+        push!(rules, _custom_rule(
+            "/components/component/$(module_name)/properties/property/$(mode_prefix)_STATUS/config",
+            Dict(
+                "name" => "$(mode_prefix)_STATUS",
+                "value" => false  # Disabled by default
+            )
+        ))
+        
+        # Store rate
+        push!(rules, _custom_rule(
+            "/components/component/$(module_name)/properties/property/$(mode_prefix)_RATE_GBPS/config",
+            Dict(
+                "name" => "$(mode_prefix)_RATE_GBPS",
+                "value" => string(mode.rate)
+            )
+        ))
+        
+        # Store spectrum slots needed
+        push!(rules, _custom_rule(
+            "/components/component/$(module_name)/properties/property/$(mode_prefix)_SLOTS/config",
+            Dict(
+                "name" => "$(mode_prefix)_SLOTS", 
+                "value" => string(mode.spectrumslotsneeded)
+            )
+        ))
+        
+        # Store optical reach
+        push!(rules, _custom_rule(
+            "/components/component/$(module_name)/properties/property/$(mode_prefix)_REACH_KM/config",
+            Dict(
+                "name" => "$(mode_prefix)_REACH_KM",
+                "value" => string(mode.opticalreach)
+            )
+        ))
+    end
+    
+    # Handle transmission module reservations (LLIs)
+    if hasfield(typeof(tm), :reservations)
+        for (uuid, lli) in tm.reservations
+            # Enable the transmission module itself
+            push!(rules, _custom_rule(
+                "/components/component/$(module_name)/transceiver/config/enabled",
+                true
+            ))
+            
+            # Enable the specific transmission mode
+            if lli.transmissionmodesindex > 0 && lli.transmissionmodesindex <= length(tm.transmissionmodes)
+                mode_prefix = "MODE_$(lli.transmissionmodesindex)"
+                push!(rules, _custom_rule(
+                    "/components/component/$(module_name)/properties/property/$(mode_prefix)_STATUS/config/value",
+                    true
+                ))
+            end
+            
+            # Create optical channel for this reservation
+            och_name = "OCH-$(lli.transmissionmoduleviewpoolindex)-$(uuid)"
+            
+            # Set operational mode based on transmission mode index
+            push!(rules, _custom_rule(
+                "/components/component/$(och_name)/optical-channel/config/operational-mode",
+                string(lli.transmissionmodesindex)
+            ))
+            
+            # # Mirror router port index as a property if needed
+            # if lli.routerportindex != 0
+            #     push!(rules, _custom_rule(
+            #         "/components/component/$(och_name)/properties/property/IFINDEX/config",
+            #         Dict(
+            #             "name" => "IFINDEX",
+            #             "value" => string(lli.routerportindex)
+            #         )
+            #     ))
+            # end
+            
+            # # Handle add/drop port mapping if specified
+            # if lli.adddropport != 0
+            #     port_name = "AD_DROP_$(lli.adddropport)"
+            #     push!(rules, _custom_rule(
+            #         "/wavelength-router/ports/port/$(port_name)/config",
+            #         Dict(
+            #             "name" => port_name,
+            #             "type" => "ADD_DROP"
+            #         )
+            #     ))
+            # end
+        end
     end
 
     return rules

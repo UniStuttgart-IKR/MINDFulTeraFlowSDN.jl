@@ -90,8 +90,6 @@ function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
         end
     end
 
-    # Remove OLS creation from individual nodes - it will be created during inter-node linking
-
     # ─────────────────────── Transmission Modules ───────────────────────────
     if nodeview.transmissionmoduleviewpool !== nothing
         for (idx, tmview) in enumerate(nodeview.transmissionmoduleviewpool)
@@ -131,9 +129,7 @@ function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
                     Ctx.EndPoint[], Ctx.Component[], nothing)
 
             if ensure_post_device(sdn.api_url, dev)
-                # Use first copper endpoint for TM rules
-                first_copper_ep_uuid = endpoint_uuids[1]
-                rules = build_config_rules(tmview; ep_uuid=first_copper_ep_uuid)
+                rules = build_config_rules(tmview)
                 _push_rules(sdn.api_url, uuid, rules; kind=:TM)
             else
                 @warn "TM device $uuid could not be created/updated"
