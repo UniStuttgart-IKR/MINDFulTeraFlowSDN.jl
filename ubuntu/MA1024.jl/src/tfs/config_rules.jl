@@ -328,18 +328,16 @@ function build_config_rules(oxc::MINDFul.OXCView, nodeview::MINDFul.NodeView)
 end
 
 # ───────── TransmissionModuleView ─────────────────────────────────────────
-function build_config_rules(tm::MINDFul.TransmissionModuleView)
+function build_config_rules(tm::MINDFul.TransmissionModuleView; node_id::Int, tm_idx::Int)
     rules = Ctx.ConfigRule[]
     
-    # Get the module name from the transmissionmodule type
-    module_name = string(typeof(tm.transmissionmodule))
+    # Use the same module name format as in devices.jl
+    module_name = "TM-Node-$(node_id)-$(tm_idx)"
     
     # Create the component entry for this transmission module
     push!(rules, _custom_rule(
         "/components/component/$(module_name)/config",
-        Dict(
-            "name" => module_name
-        )
+        Dict("name" => module_name)
     ))
     
     # Set the transmission module status (disabled by default)
@@ -354,83 +352,71 @@ function build_config_rules(tm::MINDFul.TransmissionModuleView)
         tm.name
     ))
     
-    # Store supported transmission modes as a property
-    supported_modes = [string(i) for i in 1:length(tm.transmissionmodes)]
+    # Set the cost
     push!(rules, _custom_rule(
-        "/components/component/$(module_name)/properties/property/SUPPORTED_MODES/config",
-        Dict(
-            "name" => "SUPPORTED_MODES",
-            "value" => join(supported_modes, ",")  # CSV format
-        )
+        "/components/component/$(module_name)/properties/property/COST/config",
+        Dict("name" => "COST", "value" => tm.cost)
     ))
     
     # Create properties for each transmission mode
     for (idx, mode) in enumerate(tm.transmissionmodes)
-        mode_prefix = "MODE_$(idx)"
-        
-        # Add enabled property for this mode (disabled by default)
+        och_name = "$(module_name)-OCH$(idx)"
+
+        # Create the optical-channel component
         push!(rules, _custom_rule(
-            "/components/component/$(module_name)/properties/property/$(mode_prefix)_STATUS/config",
-            Dict(
-                "name" => "$(mode_prefix)_STATUS",
-                "value" => false  # Disabled by default
-            )
+            "/components/component/$(och_name)/config",
+            Dict("name" => och_name)
         ))
-        
-        # Store rate
+
+        # Link it as a sub-component of the transceiver
         push!(rules, _custom_rule(
-            "/components/component/$(module_name)/properties/property/$(mode_prefix)_RATE_GBPS/config",
-            Dict(
-                "name" => "$(mode_prefix)_RATE_GBPS",
-                "value" => string(mode.rate)
-            )
+            "/components/component/$(module_name)/subcomponents/subcomponent/$(och_name)/config",
+            Dict("name" => och_name)
         ))
-        
-        # Store spectrum slots needed
+
+        # Pre-configure the operational-mode (idx as mode-ID)
         push!(rules, _custom_rule(
-            "/components/component/$(module_name)/properties/property/$(mode_prefix)_SLOTS/config",
-            Dict(
-                "name" => "$(mode_prefix)_SLOTS", 
-                "value" => string(mode.spectrumslotsneeded)
-            )
+            "/components/component/$(och_name)/optical-channel/config/operational-mode",
+            idx
         ))
-        
-        # Store optical reach
+
+        # Per-channel enable flag (property bag) – default OFF
         push!(rules, _custom_rule(
-            "/components/component/$(module_name)/properties/property/$(mode_prefix)_REACH_KM/config",
-            Dict(
-                "name" => "$(mode_prefix)_REACH_KM",
-                "value" => string(mode.opticalreach)
-            )
+            "/components/component/$(och_name)/properties/property/OCH_ENABLED/config",
+            Dict("name" => "OCH_ENABLED", "value" => false)
         ))
+
+        # Store mode metadata as properties of the channel
+        meta = Dict(
+            "RATE_GBPS" => string(mode.rate),
+            "SLOTS"     => string(mode.spectrumslotsneeded),
+            "REACH_KM"  => string(mode.opticalreach)
+        )
+        for (suffix, val) in meta
+            push!(rules, _custom_rule(
+                "/components/component/$(och_name)/properties/property/$(suffix)/config",
+                Dict("name" => suffix, "value" => val)
+            ))
+        end
     end
-    
-    # Handle transmission module reservations (LLIs)
+
+    # Apply Low-Level Intents (reservations) if present
     if hasfield(typeof(tm), :reservations)
         for (uuid, lli) in tm.reservations
-            # Enable the transmission module itself
+            # Power ON the whole module
             push!(rules, _custom_rule(
                 "/components/component/$(module_name)/transceiver/config/enabled",
                 true
             ))
-            
-            # Enable the specific transmission mode
-            if lli.transmissionmodesindex > 0 && lli.transmissionmodesindex <= length(tm.transmissionmodes)
-                mode_prefix = "MODE_$(lli.transmissionmodesindex)"
+
+            # Enable the selected optical channel
+            if 1 ≤ lli.transmissionmodesindex ≤ length(tm.transmissionmodes)
+                och_sel = "$(module_name)-OCH$(lli.transmissionmodesindex)"
                 push!(rules, _custom_rule(
-                    "/components/component/$(module_name)/properties/property/$(mode_prefix)_STATUS/config/value",
+                    "/components/component/$(och_sel)/properties/property/OCH_ENABLED/config/value",
                     true
                 ))
             end
-            
-            # Create optical channel for this reservation
-            och_name = "OCH-$(lli.transmissionmoduleviewpoolindex)-$(uuid)"
-            
-            # Set operational mode based on transmission mode index
-            push!(rules, _custom_rule(
-                "/components/component/$(och_name)/optical-channel/config/operational-mode",
-                string(lli.transmissionmodesindex)
-            ))
             
             # # Mirror router port index as a property if needed
             # if lli.routerportindex != 0

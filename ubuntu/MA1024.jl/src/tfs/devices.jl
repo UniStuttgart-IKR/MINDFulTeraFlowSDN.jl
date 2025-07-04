@@ -129,7 +129,7 @@ function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
                     Ctx.EndPoint[], Ctx.Component[], nothing)
 
             if ensure_post_device(sdn.api_url, dev)
-                rules = build_config_rules(tmview)
+                rules = build_config_rules(tmview; node_id=node_id, tm_idx=idx)
                 _push_rules(sdn.api_url, uuid, rules; kind=:TM)
             else
                 @warn "TM device $uuid could not be created/updated"
