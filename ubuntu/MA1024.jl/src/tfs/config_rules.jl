@@ -131,10 +131,18 @@ function build_config_rules(rv::MINDFul.RouterView)
         # Router port indices are typically 1-based, convert to interface name
         ifname = "eth$(lli.routerportindex)"
         
-        # Override the enabled status for this specific port
+        # Get the corresponding port info to maintain the speed configuration
+        port_info = rv.ports[lli.routerportindex]
+        
+        # Override the entire interface config to match creation structure
         push!(rules, _custom_rule(
-            "/interfaces/interface/$ifname/config",
-            Dict("enabled" => true)
+            "/interfaces/interface/$ifname",
+            Dict(
+                "config" => Dict("name" => ifname, "enabled" => true),  # ← Keep same structure, just change enabled
+                "ethernet" => Dict(
+                    "config" => Dict("port-speed" => _to_speed_enum(port_info.rate))
+                )
+            )
         ))
     end
 
@@ -208,7 +216,7 @@ function build_config_rules(oxc::MINDFul.OXCView, nodeview::MINDFul.NodeView)
     
     # Create input ports based on actual input neighbors
     for neighbor in nodeview.nodeproperties.inneighbors  # Assuming this is available
-        port_name = "node-$(neighbor)-input"
+        port_name = "node-$(neighbor)-input-port"
         input_port_mapping[neighbor] = port_name
         push!(rules, _custom_rule(
             "/wavelength-router/port-spectrum-power-profiles/port/$(port_name)/config",
@@ -218,7 +226,7 @@ function build_config_rules(oxc::MINDFul.OXCView, nodeview::MINDFul.NodeView)
     
     # Create output ports based on actual output neighbors
     for neighbor in nodeview.nodeproperties.outneighbors  # Assuming this is available
-        port_name = "node-$(neighbor)-output"
+        port_name = "node-$(neighbor)-output-port"
         output_port_mapping[neighbor] = port_name
         push!(rules, _custom_rule(
             "/wavelength-router/port-spectrum-power-profiles/port/$(port_name)/config",
@@ -237,7 +245,7 @@ function build_config_rules(oxc::MINDFul.OXCView, nodeview::MINDFul.NodeView)
     
     # Create port spectrum power profiles for each add/drop port
     for port_idx in 1:oxc.adddropportnumber
-        port_name = "port-$(port_idx)"
+        port_name = "adddrop-port-$(port_idx)"
         push!(rules, _custom_rule(
             "/wavelength-router/port-spectrum-power-profiles/port/$(port_name)/config",
             Dict("name" => port_name)
@@ -246,12 +254,31 @@ function build_config_rules(oxc::MINDFul.OXCView, nodeview::MINDFul.NodeView)
     
     # Map switch reservations to media channels
     for (uuid, lli) in oxc.switchreservations
-        channel_name = string(uuid)
+        # Generate a descriptive channel name based on LLI fields, without spectrum slots in the name
+        if lli.localnode_input != 0 && lli.adddropport == 0 && lli.localnode_output != 0
+            # Optical bypass: input node to output node
+            channel_name = "bypass-$(lli.localnode_input)-$(lli.localnode_output)"
+        elseif lli.localnode_input == 0 && lli.adddropport != 0 && lli.localnode_output != 0
+            # Add: adddrop port to output node
+            channel_name = "add-$(lli.adddropport)-to-$(lli.localnode_output)"
+        elseif lli.localnode_input != 0 && lli.adddropport != 0 && lli.localnode_output == 0
+            # Drop: input node to adddrop port
+            channel_name = "drop-$(lli.localnode_input)-to-$(lli.adddropport)"
+        elseif lli.localnode_input == 0 && lli.adddropport != 0 && lli.localnode_output == 0
+            # Add/drop port reservation only
+            channel_name = "adddrop-$(lli.adddropport)"
+        else
+            # Fallback to uuid if schema is unknown
+            channel_name = string(uuid)
+        end
         
-        # Create the media channel
+        # Create the media channel with admin-status ENABLED
         push!(rules, _custom_rule(
             "/wavelength-router/media-channels/channel/$(channel_name)/config",
-            Dict("name" => channel_name)
+            Dict(
+                "name" => channel_name,
+                "admin-status" => "ENABLED"
+            )
         ))
         
         # Map source and destination ports based on LLI logic
@@ -301,7 +328,11 @@ function build_config_rules(oxc::MINDFul.OXCView, nodeview::MINDFul.NodeView)
             # Case: (0, x, 0) - add/drop port reservation only
             push!(rules, _custom_rule(
                 "/wavelength-router/media-channels/channel/$(channel_name)/config",
-                Dict("reserved-port" => "port-$(lli.adddropport)")
+                Dict(
+                    "name" => channel_name,
+                    "admin-status" => "ENABLED",
+                    "reserved-port" => "port-$(lli.adddropport)"
+                )
             ))
         end
         
@@ -413,8 +444,8 @@ function build_config_rules(tm::MINDFul.TransmissionModuleView; node_id::Int, tm
             if 1 ≤ lli.transmissionmodesindex ≤ length(tm.transmissionmodes)
                 och_sel = "$(module_name)-OCH$(lli.transmissionmodesindex)"
                 push!(rules, _custom_rule(
-                    "/components/component/$(och_sel)/properties/property/OCH_ENABLED/config/value",
-                    true
+                    "/components/component/$(och_sel)/properties/property/OCH_ENABLED/config",
+                    Dict("name" => "OCH_ENABLED", "value" => true)  # ← Match creation structure
                 ))
             end
             
