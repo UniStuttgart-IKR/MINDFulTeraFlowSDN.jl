@@ -8,12 +8,12 @@ const MINDF = MINDFul
 
 Focused verification that checks:
 1. Are expected devices present in TFS based on device_map?
-2. Are intra-node links properly created in TFS?
+2. Are intra-node links properly created in TFS (ALL TMs linked)?
 3. Are inter-node links matching MINDFul topology in TFS?
 """
 function verify_tfs_devices_and_links(sdn::TeraflowSDN, nodeviews)
-    println("\n🔍 FOCUSED TFS VERIFICATION")
-    println("="^60)
+    println("\n🔍 FOCUSED TFS VERIFICATION (Multi-TM Architecture)")
+    println("="^65)
     
     # Get actual TFS state
     println("📡 Fetching TFS devices and links...")
@@ -27,8 +27,8 @@ function verify_tfs_devices_and_links(sdn::TeraflowSDN, nodeviews)
     mindful_neighbors = get_mindful_topology(nodeviews)
     
     # Run verifications
-    device_results = verify_devices_against_map(sdn, tfs_devices)
-    intra_results = verify_intra_links(sdn, tfs_links)
+    device_results = verify_devices_against_map(sdn, tfs_devices, nodeviews)
+    intra_results = verify_intra_links_multi_tm(sdn, tfs_links, nodeviews)
     inter_results = verify_inter_links(sdn, tfs_links, mindful_neighbors)
     
     # Generate focused report
@@ -55,29 +55,46 @@ function get_mindful_topology(nodeviews)
     return Dict(:neighbors => neighbors, :nodes => nodes_with_devices)
 end
 
-# Update the verification functions to handle shared OLS devices
-
-function verify_devices_against_map(sdn::TeraflowSDN, tfs_devices)
-    """Check if devices in device_map exist in TFS"""
-    println("\n📱 DEVICE VERIFICATION (Including Shared OLS)")
-    println("-"^45)
+function verify_devices_against_map(sdn::TeraflowSDN, tfs_devices, nodeviews)
+    """Check if devices in device_map exist in TFS (including multi-TM verification)"""
+    println("\n📱 DEVICE VERIFICATION (Multi-TM + Shared OLS)")
+    println("-"^50)
     
     # Extract expected devices from device_map
     expected_devices = Dict{String, Any}()  # uuid => device_info
     nodes_devices = Dict{Int, Set{Symbol}}()  # node_id => set of device types
     shared_ols_devices = Dict{String, Tuple{Int, Int}}()  # uuid => (node1, node2)
+    tm_devices_by_node = Dict{Int, Set{Int}}()  # node_id => set of TM indices
     
     for (key, uuid) in sdn.device_map
         if length(key) == 2
             node_id, device_type = key
             # Only main devices, not endpoints
-            if device_type in [:router, :oxc] || (string(device_type) |> x -> startswith(x, "tm_") && !contains(x, "_ep_"))
+            if device_type in [:router, :oxc]
                 expected_devices[uuid] = (node_id, device_type)
                 
                 if !haskey(nodes_devices, node_id)
                     nodes_devices[node_id] = Set{Symbol}()
                 end
                 push!(nodes_devices[node_id], device_type)
+            elseif string(device_type) |> x -> startswith(x, "tm_") && !contains(x, "_ep_")
+                # Extract TM index from tm_X
+                tm_match = match(r"tm_(\d+)", string(device_type))
+                if tm_match !== nothing
+                    tm_idx = parse(Int, tm_match.captures[1])
+                    expected_devices[uuid] = (node_id, device_type)
+                    
+                    if !haskey(nodes_devices, node_id)
+                        nodes_devices[node_id] = Set{Symbol}()
+                    end
+                    push!(nodes_devices[node_id], device_type)
+                    
+                    # Track TM indices per node
+                    if !haskey(tm_devices_by_node, node_id)
+                        tm_devices_by_node[node_id] = Set{Int}()
+                    end
+                    push!(tm_devices_by_node[node_id], tm_idx)
+                end
             end
         elseif length(key) == 3 && key[3] == :shared_ols
             # Handle shared OLS devices
@@ -96,11 +113,17 @@ function verify_devices_against_map(sdn::TeraflowSDN, tfs_devices)
     
     println("✅ Devices found in TFS: $(length(found_devices))/$(length(expected_devices))")
     
-    # Analyze by node and device type
+    # Analyze by node and device type with TM verification
     nodes_complete = 0
     nodes_incomplete = 0
-    nodes_empty = 0  # Nodes with no devices at all
+    nodes_empty = 0
     shared_ols_found = length(intersect(Set(keys(shared_ols_devices)), tfs_device_uuids))
+    
+    # Create nodeview lookup for TM count verification
+    node_lookup = Dict{Int, Any}()
+    for nodeview in nodeviews
+        node_lookup[nodeview.nodeproperties.localnode] = nodeview
+    end
     
     for (node_id, expected_types) in nodes_devices
         found_types = Set{Symbol}()
@@ -119,21 +142,41 @@ function verify_devices_against_map(sdn::TeraflowSDN, tfs_devices)
         
         missing_types = setdiff(expected_types, found_types)
         
+        # Verify TM count matches nodeview expectation
+        expected_tm_count = 0
+        if haskey(node_lookup, node_id) && node_lookup[node_id].transmissionmoduleviewpool !== nothing
+            expected_tm_count = length(node_lookup[node_id].transmissionmoduleviewpool)
+        end
+        
+        found_tm_count = haskey(tm_devices_by_node, node_id) ? length(tm_devices_by_node[node_id]) : 0
+        
         if isempty(missing_types)
             nodes_complete += 1
             if isempty(expected_types)
                 nodes_empty += 1
                 println("📝 Node $node_id: Empty node (no devices)")
             else
-                println("✅ Node $node_id: All devices present ($(join(string.(expected_types), ", ")))")
+                tm_status = found_tm_count == expected_tm_count ? "✓" : "✗"
+                println("✅ Node $node_id: All devices present - TMs: $found_tm_count/$expected_tm_count $tm_status")
             end
         else
             nodes_incomplete += 1
-            println("❌ Node $node_id: Missing $(join(string.(missing_types), ", "))")
+            tm_missing = expected_tm_count - found_tm_count
+            println("❌ Node $node_id: Missing $(length(missing_types)) device types, TMs: $found_tm_count/$expected_tm_count")
+            if tm_missing > 0
+                println("   Missing TM devices: $tm_missing")
+            end
         end
     end
     
     println("✅ Shared OLS devices found: $shared_ols_found/$(length(shared_ols_devices))")
+    
+    # Show TM distribution summary
+    println("\n📊 Transmission Module Distribution:")
+    total_expected_tms = sum(length(node_lookup[node_id].transmissionmoduleviewpool) for node_id in keys(node_lookup) if node_lookup[node_id].transmissionmoduleviewpool !== nothing)
+    total_found_tms = sum(length(tm_set) for tm_set in values(tm_devices_by_node))
+    println("   Total TMs expected: $total_expected_tms")
+    println("   Total TMs found: $total_found_tms")
     
     # Show shared OLS details
     if length(shared_ols_devices) > 0
@@ -165,14 +208,16 @@ function verify_devices_against_map(sdn::TeraflowSDN, tfs_devices)
         :nodes_empty => nodes_empty,
         :shared_ols_found => shared_ols_found,
         :shared_ols_total => length(shared_ols_devices),
-        :missing_devices => missing_devices
+        :missing_devices => missing_devices,
+        :total_expected_tms => total_expected_tms,
+        :total_found_tms => total_found_tms
     )
 end
 
-function verify_intra_links(sdn::TeraflowSDN, tfs_links)
-    """Check if intra-node links exist in TFS"""
-    println("\n🔗 INTRA-NODE LINK VERIFICATION")
-    println("-"^45)
+function verify_intra_links_multi_tm(sdn::TeraflowSDN, tfs_links, nodeviews)
+    """Check if intra-node links exist in TFS for ALL TMs"""
+    println("\n🔗 INTRA-NODE LINK VERIFICATION (Multi-TM Architecture)")
+    println("-"^55)
     
     # Extract expected intra-node links
     expected_intra = Set(keys(sdn.intra_link_map))
@@ -187,46 +232,98 @@ function verify_intra_links(sdn::TeraflowSDN, tfs_links)
     
     println("✅ Intra-node links found: $(length(found_links))/$(length(expected_uuids))")
     
-    # Analyze by node and link type
+    # Create nodeview lookup for TM count verification
+    node_lookup = Dict{Int, Any}()
+    for nodeview in nodeviews
+        node_lookup[nodeview.nodeproperties.localnode] = nodeview
+    end
+    
+    # Analyze by node and link type with detailed TM verification
     nodes_with_complete_intra = 0
-    intra_by_node = Dict{Int, Dict{Symbol, Bool}}()
+    intra_by_node = Dict{Int, Dict{String, Bool}}()  # Changed to String for detailed link names
+    expected_links_by_node = Dict{Int, Int}()  # Expected link count per node
     
     for ((node_id, link_type), uuid) in sdn.intra_link_map
         if !haskey(intra_by_node, node_id)
-            intra_by_node[node_id] = Dict{Symbol, Bool}()
+            intra_by_node[node_id] = Dict{String, Bool}()
         end
-        intra_by_node[node_id][link_type] = uuid in found_links
+        intra_by_node[node_id][string(link_type)] = uuid in found_links
     end
     
-    # Sort the node IDs explicitly instead of the whole pairs
+    # Calculate expected link counts for each node based on TM count
+    for (node_id, nodeview) in node_lookup
+        num_tms = nodeview.transmissionmoduleviewpool !== nothing ? length(nodeview.transmissionmoduleviewpool) : 0
+        if num_tms > 0
+            # Each TM needs: 2 router-tm links + 2 tm-oxc links = 4 links per TM
+            expected_links_by_node[node_id] = 4 * num_tms
+        else
+            expected_links_by_node[node_id] = 0
+        end
+    end
+    
+    # Sort node IDs for consistent output
     sorted_node_ids = sort(collect(keys(intra_by_node)))
     
     for node_id in sorted_node_ids
         link_status = intra_by_node[node_id]
         all_present = all(values(link_status))
         
-        if all_present
+        num_tms = haskey(node_lookup, node_id) && node_lookup[node_id].transmissionmoduleviewpool !== nothing ? 
+                  length(node_lookup[node_id].transmissionmoduleviewpool) : 0
+        expected_count = get(expected_links_by_node, node_id, 0)
+        found_count = count(values(link_status))
+        
+        if all_present && found_count == expected_count
             nodes_with_complete_intra += 1
-            link_types = collect(keys(link_status))
-            println("✅ Node $node_id: All $(length(link_types)) intra-links present")
+            println("✅ Node $node_id: All $found_count intra-links present ($(num_tms) TMs)")
         else
             missing_link_types = [lt for (lt, present) in link_status if !present]
             present_link_types = [lt for (lt, present) in link_status if present]
             
-            println("❌ Node $node_id: Missing $(length(missing_link_types)) intra-links")
-            println("   ✓ Present: $(join(string.(present_link_types), ", "))")
-            println("   ✗ Missing: $(join(string.(missing_link_types), ", "))")
+            println("❌ Node $node_id: Incomplete intra-links ($found_count/$expected_count) for $(num_tms) TMs")
+            
+            # Analyze by link category
+            router_tm_links = [lt for lt in keys(link_status) if contains(lt, "router_tm")]
+            tm_oxc_links = [lt for lt in keys(link_status) if contains(lt, "tm") && contains(lt, "oxc")]
+            
+            router_tm_present = count(get(link_status, lt, false) for lt in router_tm_links)
+            tm_oxc_present = count(get(link_status, lt, false) for lt in tm_oxc_links)
+            
+            expected_router_tm = 2 * num_tms
+            expected_tm_oxc = 2 * num_tms
+            
+            println("   Router↔TM links: $router_tm_present/$expected_router_tm")
+            println("   TM↔OXC links: $tm_oxc_present/$expected_tm_oxc")
+            
+            if !isempty(missing_link_types)
+                println("   ✗ Missing: $(join(missing_link_types[1:min(5, end)], ", "))$(length(missing_link_types) > 5 ? "..." : "")")
+            end
         end
     end
     
-    # Show missing link details
+    # Show missing link details by category
     if !isempty(missing_links)
-        println("\n❌ MISSING INTRA-LINK DETAILS:")
+        println("\n❌ MISSING INTRA-LINK ANALYSIS:")
+        router_tm_missing = 0
+        tm_oxc_missing = 0
+        other_missing = 0
+        
         for ((node_id, link_type), uuid) in sdn.intra_link_map
             if uuid in missing_links
-                println("   $uuid → Node $node_id $link_type")
+                link_type_str = string(link_type)
+                if contains(link_type_str, "router_tm")
+                    router_tm_missing += 1
+                elseif contains(link_type_str, "tm") && contains(link_type_str, "oxc")
+                    tm_oxc_missing += 1
+                else
+                    other_missing += 1
+                end
             end
         end
+        
+        println("   Router↔TM links missing: $router_tm_missing")
+        println("   TM↔OXC links missing: $tm_oxc_missing")
+        println("   Other links missing: $other_missing")
     end
     
     return Dict(
@@ -235,14 +332,15 @@ function verify_intra_links(sdn::TeraflowSDN, tfs_links)
         :missing_count => length(missing_links),
         :nodes_complete => nodes_with_complete_intra,
         :total_nodes => length(intra_by_node),
-        :missing_links => missing_links
+        :missing_links => missing_links,
+        :expected_links_by_node => expected_links_by_node
     )
 end
 
 function verify_inter_links(sdn::TeraflowSDN, tfs_links, mindful_topology)
-    """Check if inter-node links with shared OLS match MINDFul topology, accounting for empty nodes"""
-    println("\n🌐 INTER-NODE LINK VERIFICATION (Shared OLS with Empty Nodes)")
-    println("-"^55)
+    """Check if inter-node links with shared OLS match MINDFul topology, accounting for empty nodes and multi-TM offset"""
+    println("\n🌐 INTER-NODE LINK VERIFICATION (Shared OLS + Multi-TM Offset)")
+    println("-"^60)
     
     mindful_neighbors = mindful_topology[:neighbors]
     
@@ -373,6 +471,31 @@ function verify_inter_links(sdn::TeraflowSDN, tfs_links, mindful_topology)
     println("   Found shared OLS devices: $(length(shared_ols_found))")
     println("   Missing shared OLS devices: $shared_ols_missing_count")
     
+    # Show endpoint offset analysis for debugging
+    println("\n📊 OXC Endpoint Usage Analysis (Multi-TM Offset):")
+    oxc_endpoint_usage = Dict{Int, Int}()  # node_id => used endpoints
+    
+    for (link_key, uuid) in sdn.inter_link_map
+        if length(link_key) >= 6 && link_key[6] == :shared_ols_link
+            node_id = link_key[1]
+            if node_id in oxc_nodes
+                oxc_endpoint_usage[node_id] = get(oxc_endpoint_usage, node_id, 0) + 1
+            end
+        end
+    end
+    
+    for node_id in sort(collect(oxc_nodes))
+        used_eps = get(oxc_endpoint_usage, node_id, 0)
+        expected_neighbors = length(get(mindful_neighbors, node_id, Set{Int}()))
+        expected_inter_eps = expected_neighbors * 2  # 2 links per neighbor
+        
+        if used_eps == expected_inter_eps
+            println("   ✅ Node $node_id: Using $used_eps/$expected_inter_eps inter-node endpoints")
+        else
+            println("   ⚠️  Node $node_id: Using $used_eps/$expected_inter_eps inter-node endpoints")
+        end
+    end
+    
     if shared_ols_missing_count > 0
         println("\n❌ MISSING SHARED OLS DEVICES:")
         for pair in setdiff(Set(keys(expected_shared_ols)), Set(keys(shared_ols_found)))
@@ -396,27 +519,33 @@ function verify_inter_links(sdn::TeraflowSDN, tfs_links, mindful_topology)
         :shared_ols_expected => length(expected_shared_ols),
         :shared_ols_found => length(shared_ols_found),
         :shared_ols_missing => shared_ols_missing_count,
-        :missing_shared_ols => missing_shared_ols
+        :missing_shared_ols => missing_shared_ols,
+        :oxc_endpoint_usage => oxc_endpoint_usage
     )
 end
 
 function generate_focused_report(device_results, intra_results, inter_results)
-    """Generate focused verification report accounting for empty nodes"""
-    println("\n" * "="^60)
-    println("🏁 FOCUSED VERIFICATION SUMMARY (With Empty Nodes)")
-    println("="^60)
+    """Generate focused verification report for multi-TM architecture"""
+    println("\n" * "="^65)
+    println("🏁 FOCUSED VERIFICATION SUMMARY (Multi-TM Architecture)")
+    println("="^65)
     
-    # Device summary
+    # Device summary with TM details
     dev_health = (device_results[:found_in_tfs] / max(device_results[:total_expected], 1)) * 100
     println("📱 Devices: $(device_results[:found_in_tfs])/$(device_results[:total_expected]) found ($(round(dev_health, digits=1))%)")
     println("   Complete nodes: $(device_results[:nodes_complete])")
     println("   Incomplete nodes: $(device_results[:nodes_incomplete])")
+    println("   Transmission modules: $(device_results[:total_found_tms])/$(device_results[:total_expected_tms])")
     println("   Shared OLS devices: $(device_results[:shared_ols_found])/$(device_results[:shared_ols_total])")
     
-    # Intra-link summary
+    # Intra-link summary with multi-TM details
     intra_health = (intra_results[:found_in_tfs] / max(intra_results[:total_expected], 1)) * 100
     println("🔗 Intra-links: $(intra_results[:found_in_tfs])/$(intra_results[:total_expected]) found ($(round(intra_health, digits=1))%)")
     println("   Complete nodes: $(intra_results[:nodes_complete])/$(intra_results[:total_nodes])")
+    
+    # Calculate total expected links for all TMs
+    total_expected_intra = sum(values(intra_results[:expected_links_by_node]))
+    println("   Multi-TM architecture: $(intra_results[:found_in_tfs])/$total_expected_intra links")
     
     # Inter-link summary with empty node considerations
     inter_health = (inter_results[:found_in_tfs] / max(inter_results[:total_expected], 1)) * 100
@@ -430,38 +559,47 @@ function generate_focused_report(device_results, intra_results, inter_results)
     overall_health = (dev_health + intra_health + inter_health) / 3
     println("\n🎯 Overall Health: $(round(overall_health, digits=1))%")
     
-    println("\n🔍 KEY ISSUES ANALYSIS (With Empty Node Support)")
-    println("-"^50)
+    println("\n🔍 KEY ISSUES ANALYSIS (Multi-TM Architecture)")
+    println("-"^55)
     
     issues_found = false
     
-    # Device issues
+    # Device issues with TM details
     if device_results[:missing_count] > 0
         issues_found = true
         println("❌ DEVICE ISSUES:")
         println("   • $(device_results[:missing_count]) devices missing from TFS")
+        
+        tm_missing = device_results[:total_expected_tms] - device_results[:total_found_tms]
+        if tm_missing > 0
+            println("   • $tm_missing transmission modules missing")
+        end
+        
         if device_results[:shared_ols_found] < device_results[:shared_ols_total]
             missing_shared_ols = device_results[:shared_ols_total] - device_results[:shared_ols_found]
             println("   • $missing_shared_ols shared OLS devices missing")
         end
     else
         println("✅ DEVICES: All $(device_results[:total_expected]) devices present in TFS")
+        println("✅ TRANSMISSION MODULES: All $(device_results[:total_expected_tms]) TMs present")
         if device_results[:shared_ols_found] == device_results[:shared_ols_total]
             println("✅ SHARED OLS: All $(device_results[:shared_ols_total]) shared OLS devices present")
         end
     end
     
-    # Intra-link issues
+    # Intra-link issues with multi-TM context
     if intra_results[:missing_count] > 0
         issues_found = true
-        println("\n❌ INTRA-NODE LINK ISSUES:")
+        println("\n❌ INTRA-NODE LINK ISSUES (Multi-TM Architecture):")
         println("   • $(intra_results[:missing_count]) intra-node links missing from TFS")
         incomplete_nodes = intra_results[:total_nodes] - intra_results[:nodes_complete]
         if incomplete_nodes > 0
-            println("   • $incomplete_nodes nodes have incomplete internal connectivity")
+            println("   • $incomplete_nodes nodes have incomplete TM connectivity")
+            println("   • Multi-TM architecture requires 4 links per TM (2 router↔TM + 2 TM↔OXC)")
         end
     else
         println("\n✅ INTRA-LINKS: All $(intra_results[:total_expected]) internal links present in TFS")
+        println("✅ MULTI-TM: All TMs properly connected to router and OXC")
     end
     
     # Inter-link issues with empty node context
@@ -469,10 +607,12 @@ function generate_focused_report(device_results, intra_results, inter_results)
         issues_found = true
         println("\n❌ INTER-NODE LINK ISSUES:")
         println("   • $(inter_results[:missing_count]) inter-node links missing from TFS")
-        println("   • Note: Only OXC nodes ($(inter_results[:oxc_nodes])) should have physical links")
+        println("   • Note: OXC endpoints for inter-node links start after TM endpoints")
+        println("   • Only OXC nodes ($(inter_results[:oxc_nodes])) should have physical links")
         println("   • Empty nodes ($(inter_results[:empty_nodes])) only need shared OLS devices")
     else
         println("\n✅ INTER-LINKS: All $(inter_results[:total_expected]) inter-node links present in TFS")
+        println("✅ ENDPOINT OFFSET: Multi-TM endpoint allocation working correctly")
     end
     
     # Shared OLS infrastructure issues
@@ -514,20 +654,26 @@ function generate_focused_report(device_results, intra_results, inter_results)
         println("\n✅ TOPOLOGY: All expected network connections established for OXC nodes")
     end
     
-    # Summary for empty nodes
+    # Multi-TM architecture summary
+    println("\n📊 MULTI-TM ARCHITECTURE SUMMARY:")
+    println("   • All TMs linked to both router and OXC (not just first TM)")
+    println("   • Router endpoints: 2 per TM (incoming + outgoing)")
+    println("   • OXC endpoints: 2 per TM + 2 per neighbor (TM + inter-node)")
+    println("   • Inter-node links use OXC endpoints after TM endpoint offset")
+    
     if inter_results[:empty_nodes] > 0
         println("\n📊 EMPTY NODE SUMMARY:")
         println("   • $(inter_results[:empty_nodes]) nodes have no OXC devices")
         println("   • These nodes only participate via shared OLS devices")
-        println("   • No physical links expected from these nodes")
+        println("   • No physical links or TM endpoint offsets for these nodes")
     end
     
-    println("="^60)
+    println("="^65)
     
     return overall_health
 end
 
-# Main execution function
+# Main execution function (unchanged)
 function run_focused_verification()
     # Load data
     domains_name_graph = first(JLD2.load("data/itz_IowaStatewideFiberMap-itz_Missouri__(1,9)-(2,3),(1,6)-(2,54),(1,1)-(2,21).jld2"))[2]

@@ -118,178 +118,327 @@ function create_link_between_devices(sdn::TeraflowSDN, device1_key::Tuple, devic
 end
 
 """
-    create_router_tm_link(sdn::TeraflowSDN, node_id::Int) → Bool
-Create intra-node link between router and first TM using copper endpoints.
-Router ep1 (incoming) → TM copper ep1, Router ep2 (outgoing) → TM copper ep2
+    create_router_tm_links(sdn::TeraflowSDN, node_id::Int, num_tms::Int) → Bool
+Create intra-node links between router and ALL TMs using copper endpoints.
+For each TM: Router ep(2i-1) → TM copper ep1, Router ep(2i) → TM copper ep2
 """
-function create_router_tm_link(sdn::TeraflowSDN, node_id::Int; link_type::Symbol = :copper)
-    # Check if first TM exists
-    tm_key = (node_id, :tm_1)
-    if !haskey(sdn.device_map, tm_key)
-        @warn "First TM device not found for node $node_id"
-        return false
-    end
-    
+function create_router_tm_links(sdn::TeraflowSDN, node_id::Int, num_tms::Int; link_type::Symbol = :copper)
     success_count = 0
     
-    # Create two links: Router ep1 ↔ TM copper ep1, Router ep2 ↔ TM copper ep2
-    for ep_pair in [(1, 1), (2, 2)]
-        router_ep_idx, tm_ep_idx = ep_pair
+    for tm_idx in 1:num_tms
+        # Calculate router endpoint indices for this TM
+        router_ep1_idx = 2 * tm_idx - 1  # Odd indices: 1, 3, 5, ...
+        router_ep2_idx = 2 * tm_idx      # Even indices: 2, 4, 6, ...
         
-        router_ep_key = (node_id, Symbol("router_ep_$(router_ep_idx)"))
-        tm_ep_key = (node_id, Symbol("tm_1_copper_ep_$(tm_ep_idx)"))
-        
-        if !haskey(sdn.device_map, router_ep_key)
-            @warn "Router endpoint not found: $router_ep_key"
-            continue
-        end
-        
-        if !haskey(sdn.device_map, tm_ep_key)
-            @warn "TM endpoint not found: $tm_ep_key"
-            continue
-        end
-        
-        router_ep_uuid = sdn.device_map[router_ep_key]
-        tm_ep_uuid = sdn.device_map[tm_ep_key]
-        
-        # Check if already used
-        if get(sdn.endpoint_usage, router_ep_uuid, false) || get(sdn.endpoint_usage, tm_ep_uuid, false)
-            @warn "Endpoints already in use for router-tm link: $router_ep_key ↔ $tm_ep_key"
-            continue
-        end
-        
-        # Generate link details
-        link_uuid = stable_uuid(node_id * 100 + ep_pair[1], Symbol("router_tm_link_$(ep_pair[1])"))
-        link_name = "IntraLink-Router-ep$(router_ep_idx)-TM1-copper-ep$(tm_ep_idx)-node-$(node_id)"
-        link_key = (node_id, Symbol("router_tm_link_$(ep_pair[1])"))
-        
-        # Store in intra-link map
-        sdn.intra_link_map[link_key] = link_uuid
-        
-        # Create the link
-        success = create_link_between_devices(sdn, router_ep_key, tm_ep_key, 
-                                            link_name, link_uuid; link_type=link_type)
-        
-        if success
-            # Mark endpoints as used
-            sdn.endpoint_usage[router_ep_uuid] = true
-            sdn.endpoint_usage[tm_ep_uuid] = true
-            success_count += 1
-            println("✓ Created router-TM link: Router-ep$(router_ep_idx) ↔ TM1-copper-ep$(tm_ep_idx) (node $node_id)")
-        else
-            @warn "✗ Failed to create router-TM link for endpoints $(ep_pair) (node $node_id)"
+        # Create 2 links for this TM
+        for (router_ep_idx, tm_copper_ep_idx) in [(router_ep1_idx, 1), (router_ep2_idx, 2)]
+            router_ep_key = (node_id, Symbol("router_ep_$(router_ep_idx)"))
+            tm_ep_key = (node_id, Symbol("tm_$(tm_idx)_copper_ep_$(tm_copper_ep_idx)"))
+            
+            if !haskey(sdn.device_map, router_ep_key)
+                @warn "Router endpoint not found: $router_ep_key"
+                continue
+            end
+            
+            if !haskey(sdn.device_map, tm_ep_key)
+                @warn "TM copper endpoint not found: $tm_ep_key"
+                continue
+            end
+            
+            # Check if already used
+            router_ep_uuid = sdn.device_map[router_ep_key]
+            tm_ep_uuid = sdn.device_map[tm_ep_key]
+            
+            if get(sdn.endpoint_usage, router_ep_uuid, false) || get(sdn.endpoint_usage, tm_ep_uuid, false)
+                @warn "Endpoints already in use for router-tm$tm_idx link: $router_ep_key ↔ $tm_ep_key"
+                continue
+            end
+            
+            # Generate link details
+            link_uuid = stable_uuid(node_id * 1000 + tm_idx * 10 + tm_copper_ep_idx, Symbol("router_tm$(tm_idx)_link_$(tm_copper_ep_idx)"))
+            link_name = "IntraLink-Router-ep$(router_ep_idx)-TM$(tm_idx)-copper-ep$(tm_copper_ep_idx)-node-$(node_id)"
+            link_key = (node_id, Symbol("router_tm$(tm_idx)_link_$(tm_copper_ep_idx)"))
+            
+            # Store in intra-link map
+            sdn.intra_link_map[link_key] = link_uuid
+            
+            # Create link using the fixed function signature
+            success = create_link_between_devices(sdn, router_ep_key, tm_ep_key, 
+                                                link_name, link_uuid; link_type=link_type)
+            
+            if success
+                # Mark endpoints as used
+                sdn.endpoint_usage[router_ep_uuid] = true
+                sdn.endpoint_usage[tm_ep_uuid] = true
+                success_count += 1
+                println("  ✓ Router-TM$tm_idx link: ep$(router_ep_idx) ↔ copper_ep$(tm_copper_ep_idx)")
+            else
+                @warn "Failed to create Router-TM$tm_idx link: ep$(router_ep_idx) ↔ copper_ep$(tm_copper_ep_idx)"
+            end
         end
     end
     
-    return success_count == 2  # Both links should succeed
+    expected_links = 2 * num_tms
+    println("  Router-TM links: $success_count/$expected_links successful")
+    return success_count == expected_links
 end
 
 """
-    create_tm_oxc_link(sdn::TeraFlowSDN, node_id::Int) → Bool
-Create intra-node link between first TM and OXC using fiber endpoints.
-TM fiber ep1 ↔ OXC ep1, TM fiber ep2 ↔ OXC ep2
+    create_tm_oxc_links(sdn::TeraflowSDN, node_id::Int, num_tms::Int) → Bool
+Create intra-node links between ALL TMs and OXC using fiber endpoints.
+For each TM: TM fiber ep1 ↔ OXC ep(2i-1), TM fiber ep2 ↔ OXC ep(2i)
 """
-function create_tm_oxc_link(sdn::TeraflowSDN, node_id::Int; link_type::Symbol = :fiber)
+function create_tm_oxc_links(sdn::TeraflowSDN, node_id::Int, num_tms::Int; link_type::Symbol = :fiber)
     success_count = 0
     
-    # Create two links: TM fiber ep1 ↔ OXC ep1, TM fiber ep2 ↔ OXC ep2
-    for ep_pair in [(1, 1), (2, 2)]
-        tm_ep_idx, oxc_ep_idx = ep_pair
+    for tm_idx in 1:num_tms
+        # Calculate OXC endpoint indices for this TM
+        oxc_ep1_idx = 2 * tm_idx - 1  # Odd indices: 1, 3, 5, ...
+        oxc_ep2_idx = 2 * tm_idx      # Even indices: 2, 4, 6, ...
         
-        tm_ep_key = (node_id, Symbol("tm_1_fiber_ep_$(tm_ep_idx)"))
-        oxc_ep_key = (node_id, Symbol("oxc_ep_$(oxc_ep_idx)"))
-        
-        if !haskey(sdn.device_map, tm_ep_key)
-            @warn "TM fiber endpoint not found: $tm_ep_key"
-            continue
-        end
-        
-        if !haskey(sdn.device_map, oxc_ep_key)
-            @warn "OXC endpoint not found: $oxc_ep_key"
-            continue
-        end
-        
-        tm_ep_uuid = sdn.device_map[tm_ep_key]
-        oxc_ep_uuid = sdn.device_map[oxc_ep_key]
-        
-        # Check if already used
-        if get(sdn.endpoint_usage, tm_ep_uuid, false) || get(sdn.endpoint_usage, oxc_ep_uuid, false)
-            @warn "Endpoints already in use for tm-oxc link: $tm_ep_key ↔ $oxc_ep_key"
-            continue
-        end
-        
-        # Generate link details
-        link_uuid = stable_uuid(node_id * 200 + ep_pair[1], Symbol("tm_oxc_link_$(ep_pair[1])"))
-        link_name = "IntraLink-TM1-fiber-ep$(tm_ep_idx)-OXC-ep$(oxc_ep_idx)-node-$(node_id)"
-        link_key = (node_id, Symbol("tm_oxc_link_$(ep_pair[1])"))
-        
-        # Store in intra-link map
-        sdn.intra_link_map[link_key] = link_uuid
-        
-        # Create the link
-        success = create_link_between_devices(sdn, tm_ep_key, oxc_ep_key,
-                                            link_name, link_uuid; link_type=link_type)
-        
-        if success
-            # Mark endpoints as used
-            sdn.endpoint_usage[tm_ep_uuid] = true
-            sdn.endpoint_usage[oxc_ep_uuid] = true
-            success_count += 1
-            println("✓ Created TM-OXC link: TM1-fiber-ep$(tm_ep_idx) ↔ OXC-ep$(oxc_ep_idx) (node $node_id)")
-        else
-            @warn "✗ Failed to create TM-OXC link for endpoints $(ep_pair) (node $node_id)"
+        # Create 2 links for this TM
+        for (tm_fiber_ep_idx, oxc_ep_idx) in [(1, oxc_ep1_idx), (2, oxc_ep2_idx)]
+            tm_ep_key = (node_id, Symbol("tm_$(tm_idx)_fiber_ep_$(tm_fiber_ep_idx)"))
+            oxc_ep_key = (node_id, Symbol("oxc_ep_$(oxc_ep_idx)"))
+            
+            if !haskey(sdn.device_map, tm_ep_key)
+                @warn "TM fiber endpoint not found: $tm_ep_key"
+                continue
+            end
+            
+            if !haskey(sdn.device_map, oxc_ep_key)
+                @warn "OXC endpoint not found: $oxc_ep_key"
+                continue
+            end
+            
+            # Check if already used
+            tm_ep_uuid = sdn.device_map[tm_ep_key]
+            oxc_ep_uuid = sdn.device_map[oxc_ep_key]
+            
+            if get(sdn.endpoint_usage, tm_ep_uuid, false) || get(sdn.endpoint_usage, oxc_ep_uuid, false)
+                @warn "Endpoints already in use for tm$tm_idx-oxc link: $tm_ep_key ↔ $oxc_ep_key"
+                continue
+            end
+            
+            # Generate link details
+            link_uuid = stable_uuid(node_id * 2000 + tm_idx * 10 + tm_fiber_ep_idx, Symbol("tm$(tm_idx)_oxc_link_$(tm_fiber_ep_idx)"))
+            link_name = "IntraLink-TM$(tm_idx)-fiber-ep$(tm_fiber_ep_idx)-OXC-ep$(oxc_ep_idx)-node-$(node_id)"
+            link_key = (node_id, Symbol("tm$(tm_idx)_oxc_link_$(tm_fiber_ep_idx)"))
+            
+            # Store in intra-link map
+            sdn.intra_link_map[link_key] = link_uuid
+            
+            # Create link using the fixed function signature
+            success = create_link_between_devices(sdn, tm_ep_key, oxc_ep_key,
+                                                link_name, link_uuid; link_type=link_type)
+            
+            if success
+                # Mark endpoints as used
+                sdn.endpoint_usage[tm_ep_uuid] = true
+                sdn.endpoint_usage[oxc_ep_uuid] = true
+                success_count += 1
+                println("  ✓ TM$tm_idx-OXC link: fiber_ep$(tm_fiber_ep_idx) ↔ oxc_ep$(oxc_ep_idx)")
+            else
+                @warn "Failed to create TM$tm_idx-OXC link: fiber_ep$(tm_fiber_ep_idx) ↔ oxc_ep$(oxc_ep_idx)"
+            end
         end
     end
     
-    return success_count == 2
+    expected_links = 2 * num_tms
+    println("  TM-OXC links: $success_count/$expected_links successful")
+    return success_count == expected_links
 end
 
-# Update intra-node connection function to only do Router ↔ TM ↔ OXC
 """
     connect_all_intra_node_devices(sdn::TeraflowSDN) → Int
 Create all intra-node connections in the correct order:
-1. Router ↔ TM1 (copper)
-2. TM1 ↔ OXC (fiber) 
-Note: OXC ↔ OLS connections are now handled in inter-node linking with shared OLS
+1. Router ↔ ALL TMs (copper)
+2. ALL TMs ↔ OXC (fiber) 
 """
 function connect_all_intra_node_devices(sdn::TeraflowSDN)
-    links_created = 0
+    println("🔗 Creating intra-node device connections...")
+    total_links = 0
     
-    # Find nodes with complete device sets (router, tm, oxc)
-    nodes_with_router = Set{Int}()
-    nodes_with_tm = Set{Int}()
-    nodes_with_oxc = Set{Int}()
-    
+    # Get all nodes that have devices
+    nodes_with_devices = Set{Int}()
     for (key, uuid) in sdn.device_map
-        if string(key[2]) |> x -> startswith(x, "router_ep_")
-            push!(nodes_with_router, key[1])
-        elseif key[2] == :tm_1
-            push!(nodes_with_tm, key[1])
-        elseif key[2] == :oxc
-            push!(nodes_with_oxc, key[1])
+        if length(key) >= 2 && key[2] in [:router, :oxc] || (length(key) >= 2 && string(key[2]) |> x -> startswith(x, "tm_") && !contains(x, "_ep_"))
+            push!(nodes_with_devices, key[1])
         end
     end
     
-    nodes_for_connection = intersect(nodes_with_router, nodes_with_tm, nodes_with_oxc)
-    
-    println("🔗 Found $(length(nodes_for_connection)) nodes for complete intra-node connections")
-    
-    for node_id in sort(collect(nodes_for_connection))
-        println("🔧 Creating intra-node connections for node $node_id...")
+    for node_id in sort(collect(nodes_with_devices))
+        println("  Node $node_id:")
         
-        # Step 1: Router ↔ TM1 (copper)
-        if create_router_tm_link(sdn, node_id; link_type=:copper)
-            links_created += 2  # Two links created (ep1↔ep1, ep2↔ep2)
+        # Count TMs for this node - ONLY count TMs that actually exist in device_map
+        tm_indices = Set{Int}()
+        for (key, uuid) in sdn.device_map
+            if length(key) >= 2 && key[1] == node_id && string(key[2]) |> x -> startswith(x, "tm_") && !contains(x, "_ep_")
+                # Extract TM index from tm_X
+                tm_match = match(r"tm_(\d+)", string(key[2]))
+                if tm_match !== nothing
+                    tm_idx = parse(Int, tm_match.captures[1])
+                    push!(tm_indices, tm_idx)
+                end
+            end
         end
         
-        # Step 2: TM1 ↔ OXC (fiber)
-        if create_tm_oxc_link(sdn, node_id; link_type=:fiber)
-            links_created += 2  # Two links created
+        num_tms = length(tm_indices)
+        
+        if num_tms == 0
+            println("    No TMs found, skipping intra-node connections")
+            continue
         end
         
-        # Note: OXC ↔ OLS connections are now handled in inter-node linking
+        println("    Found $num_tms TMs (indices: $(sort(collect(tm_indices)))), creating connections...")
+        
+        # 1. Router ↔ ALL TMs (copper) - only for TMs that exist
+        if create_router_tm_links_selective(sdn, node_id, tm_indices)
+            total_links += 2 * num_tms
+        end
+        
+        # 2. ALL TMs ↔ OXC (fiber) - only for TMs that exist
+        if create_tm_oxc_links_selective(sdn, node_id, tm_indices)
+            total_links += 2 * num_tms
+        end
     end
     
-    println("✅ Created $links_created total intra-node links")
-    return links_created
+    println("✓ Intra-node connections complete: $total_links links created")
+    return total_links
+end
+
+"""
+    create_router_tm_links_selective(sdn::TeraflowSDN, node_id::Int, tm_indices::Set{Int}) → Bool
+Create intra-node links between router and EXISTING TMs only.
+"""
+function create_router_tm_links_selective(sdn::TeraflowSDN, node_id::Int, tm_indices::Set{Int}; link_type::Symbol = :copper)
+    success_count = 0
+    
+    for tm_idx in sort(collect(tm_indices))
+        # Calculate router endpoint indices for this TM
+        router_ep1_idx = 2 * tm_idx - 1  # Odd indices: 1, 3, 5, ...
+        router_ep2_idx = 2 * tm_idx      # Even indices: 2, 4, 6, ...
+        
+        # Create 2 links for this TM
+        for (router_ep_idx, tm_copper_ep_idx) in [(router_ep1_idx, 1), (router_ep2_idx, 2)]
+            router_ep_key = (node_id, Symbol("router_ep_$(router_ep_idx)"))
+            tm_ep_key = (node_id, Symbol("tm_$(tm_idx)_copper_ep_$(tm_copper_ep_idx)"))
+            
+            if !haskey(sdn.device_map, router_ep_key)
+                @warn "Router endpoint not found: $router_ep_key"
+                continue
+            end
+            
+            if !haskey(sdn.device_map, tm_ep_key)
+                @warn "TM copper endpoint not found: $tm_ep_key"
+                continue
+            end
+            
+            # Check if already used
+            router_ep_uuid = sdn.device_map[router_ep_key]
+            tm_ep_uuid = sdn.device_map[tm_ep_key]
+            
+            if get(sdn.endpoint_usage, router_ep_uuid, false) || get(sdn.endpoint_usage, tm_ep_uuid, false)
+                @warn "Endpoints already in use for router-tm$tm_idx link: $router_ep_key ↔ $tm_ep_key"
+                continue
+            end
+            
+            # Generate link details
+            link_uuid = stable_uuid(node_id * 1000 + tm_idx * 10 + tm_copper_ep_idx, Symbol("router_tm$(tm_idx)_link_$(tm_copper_ep_idx)"))
+            link_name = "IntraLink-Router-ep$(router_ep_idx)-TM$(tm_idx)-copper-ep$(tm_copper_ep_idx)-node-$(node_id)"
+            link_key = (node_id, Symbol("router_tm$(tm_idx)_link_$(tm_copper_ep_idx)"))
+            
+            # Store in intra-link map
+            sdn.intra_link_map[link_key] = link_uuid
+            
+            # Create link using the fixed function signature
+            success = create_link_between_devices(sdn, router_ep_key, tm_ep_key, 
+                                                link_name, link_uuid; link_type=link_type)
+            
+            if success
+                # Mark endpoints as used
+                sdn.endpoint_usage[router_ep_uuid] = true
+                sdn.endpoint_usage[tm_ep_uuid] = true
+                success_count += 1
+                println("  ✓ Router-TM$tm_idx link: ep$(router_ep_idx) ↔ copper_ep$(tm_copper_ep_idx)")
+
+                # Add delay to prevent API overload
+                sleep(0.1)
+            else
+                @warn "Failed to create Router-TM$tm_idx link: ep$(router_ep_idx) ↔ copper_ep$(tm_copper_ep_idx)"
+            end
+        end
+    end
+    
+    expected_links = 2 * length(tm_indices)
+    println("  Router-TM links: $success_count/$expected_links successful")
+    return success_count == expected_links
+end
+
+"""
+    create_tm_oxc_links_selective(sdn::TeraflowSDN, node_id::Int, tm_indices::Set{Int}) → Bool
+Create intra-node links between EXISTING TMs and OXC only.
+"""
+function create_tm_oxc_links_selective(sdn::TeraflowSDN, node_id::Int, tm_indices::Set{Int}; link_type::Symbol = :fiber)
+    success_count = 0
+    
+    for tm_idx in sort(collect(tm_indices))
+        # Calculate OXC endpoint indices for this TM
+        oxc_ep1_idx = 2 * tm_idx - 1  # Odd indices: 1, 3, 5, ...
+        oxc_ep2_idx = 2 * tm_idx      # Even indices: 2, 4, 6, ...
+        
+        # Create 2 links for this TM
+        for (tm_fiber_ep_idx, oxc_ep_idx) in [(1, oxc_ep1_idx), (2, oxc_ep2_idx)]
+            tm_ep_key = (node_id, Symbol("tm_$(tm_idx)_fiber_ep_$(tm_fiber_ep_idx)"))
+            oxc_ep_key = (node_id, Symbol("oxc_ep_$(oxc_ep_idx)"))
+            
+            if !haskey(sdn.device_map, tm_ep_key)
+                @warn "TM fiber endpoint not found: $tm_ep_key"
+                continue
+            end
+            
+            if !haskey(sdn.device_map, oxc_ep_key)
+                @warn "OXC endpoint not found: $oxc_ep_key"
+                continue
+            end
+            
+            # Check if already used
+            tm_ep_uuid = sdn.device_map[tm_ep_key]
+            oxc_ep_uuid = sdn.device_map[oxc_ep_key]
+            
+            if get(sdn.endpoint_usage, tm_ep_uuid, false) || get(sdn.endpoint_usage, oxc_ep_uuid, false)
+                @warn "Endpoints already in use for tm$tm_idx-oxc link: $tm_ep_key ↔ $oxc_ep_key"
+                continue
+            end
+            
+            # Generate link details
+            link_uuid = stable_uuid(node_id * 2000 + tm_idx * 10 + tm_fiber_ep_idx, Symbol("tm$(tm_idx)_oxc_link_$(tm_fiber_ep_idx)"))
+            link_name = "IntraLink-TM$(tm_idx)-fiber-ep$(tm_fiber_ep_idx)-OXC-ep$(oxc_ep_idx)-node-$(node_id)"
+            link_key = (node_id, Symbol("tm$(tm_idx)_oxc_link_$(tm_fiber_ep_idx)"))
+            
+            # Store in intra-link map
+            sdn.intra_link_map[link_key] = link_uuid
+            
+            # Create link using the fixed function signature
+            success = create_link_between_devices(sdn, tm_ep_key, oxc_ep_key,
+                                                link_name, link_uuid; link_type=link_type)
+            
+            if success
+                # Mark endpoints as used
+                sdn.endpoint_usage[tm_ep_uuid] = true
+                sdn.endpoint_usage[oxc_ep_uuid] = true
+                success_count += 1
+                println("  ✓ TM$tm_idx-OXC link: fiber_ep$(tm_fiber_ep_idx) ↔ oxc_ep$(oxc_ep_idx)")
+
+                # Add delay to prevent API overload
+                sleep(0.1)
+            else
+                @warn "Failed to create TM$tm_idx-OXC link: fiber_ep$(tm_fiber_ep_idx) ↔ oxc_ep$(oxc_ep_idx)"
+            end
+        end
+    end
+    
+    expected_links = 2 * length(tm_indices)
+    println("  TM-OXC links: $success_count/$expected_links successful")
+    return success_count == expected_links
 end

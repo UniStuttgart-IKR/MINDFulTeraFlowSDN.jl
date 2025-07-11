@@ -6,6 +6,9 @@ function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
 
 
     node_id = nodeview.nodeproperties.localnode
+    
+    # Calculate number of TMs for endpoint calculations
+    num_tms = nodeview.transmissionmoduleviewpool !== nothing ? length(nodeview.transmissionmoduleviewpool) : 0
 
     # ───────────────────────── Router ───────────────────────────────────────
     if nodeview.routerview !== nothing
@@ -14,8 +17,9 @@ function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
                     stable_uuid(node_id, :router)
                 end
 
-        # Create 2 copper endpoints for router
-        endpoint_uuids = create_router_endpoints(sdn, node_id)
+        # Create 2*num_tms copper endpoints for router (2 per TM)
+        endpoint_uuids = create_router_endpoints(sdn, node_id, num_tms)
+        println("  [Router $node_id] Created $(length(endpoint_uuids)) copper endpoints for $num_tms TMs")
 
         endpoints_config = []
         for (i, ep_uuid) in enumerate(endpoint_uuids)
@@ -26,18 +30,16 @@ function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
         end
 
         ep_rule = _custom_rule("_connect/settings", Dict("endpoints" => endpoints_config))
-
-        # Fix: Use proper array constructor for device_drivers
         device_drivers = Vector{Ctx.DeviceDriverEnum.T}()
         push!(device_drivers, Ctx.DeviceDriverEnum.DEVICEDRIVER_UNDEFINED)
 
         dev  = Ctx.Device(
                     Ctx.DeviceId(Ctx.Uuid(uuid)),
-                    "Router-Node-$(node_id)",                     # name
-                    "emu-packet-router",                # device_type
-                    Ctx.DeviceConfig([ep_rule]),               # empty config – rules follow
+                    "Router-Node-$(node_id)",
+                    "emu-packet-router",
+                    Ctx.DeviceConfig([ep_rule]),
                     Ctx.DeviceOperationalStatusEnum.DEVICEOPERATIONALSTATUS_ENABLED,
-                    device_drivers,  # Use the properly constructed array
+                    device_drivers,
                     Ctx.EndPoint[], Ctx.Component[], nothing)
 
         if ensure_post_device(sdn.api_url, dev)
@@ -50,10 +52,14 @@ function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
 
     # ───────────────────────── OXC ───────────────────────────────────────────
     if nodeview.oxcview !== nothing
-        # Calculate and create variable number of fiber endpoints for OXC based on neighbors
-        n_eps = oxc_endpoints_needed(nodeview)
+        # Calculate endpoints needed: 2 per TM + 2 per neighbor
+        neighbors = Set{Int}()
+        union!(neighbors, nodeview.nodeproperties.inneighbors)
+        union!(neighbors, nodeview.nodeproperties.outneighbors)
+        
+        n_eps = 2 * num_tms + length(neighbors) * 2
         endpoint_uuids = create_oxc_endpoints(sdn, node_id, n_eps)
-        println("  [OXC $node_id] Created $n_eps fiber endpoints before posting device")
+        println("  [OXC $node_id] Created $n_eps fiber endpoints ($num_tms TMs + $(length(neighbors)) neighbors)")
 
         key  = (node_id, :oxc)
         uuid = get!(sdn.device_map, key) do
@@ -83,7 +89,7 @@ function push_node_devices_to_tfs(nodeview, sdn::TeraflowSDN)
                     Ctx.EndPoint[], Ctx.Component[], nothing)
 
         if ensure_post_device(sdn.api_url, dev)
-            rules = build_config_rules(nodeview.oxcview, nodeview)  # Pass both oxcview and nodeview
+            rules = build_config_rules(nodeview.oxcview, nodeview)
             _push_rules(sdn.api_url, uuid, rules; kind=:OXC)
         else
             @warn "OXC device $uuid could not be created/updated"

@@ -2,13 +2,12 @@
 Inter-node link creation with shared OLS
 """
 
-# Update inter-node linking to create shared OLS and connect OXCs to it
 """
-    create_inter_node_connection_with_shared_ols(sdn::TeraflowSDN, node1_id::Int, node2_id::Int) → Bool
+    create_inter_node_connection_with_shared_ols(sdn::TeraflowSDN, node1_id::Int, node2_id::Int, num_tms_node1::Int, num_tms_node2::Int) → Bool
 Create inter-node connection with shared OLS device.
-Creates shared OLS between two nodes and connects each node's OXC to it with 2 links each (if OXC exists).
+Uses DYNAMIC OXC endpoint assignment to avoid conflicts.
 """
-function create_inter_node_connection_with_shared_ols(sdn::TeraflowSDN, node1_id::Int, node2_id::Int; link_type::Symbol = :fiber)
+function create_inter_node_connection_with_shared_ols(sdn::TeraflowSDN, node1_id::Int, node2_id::Int, num_tms_node1::Int, num_tms_node2::Int; link_type::Symbol = :fiber)
     println("🌉 Creating inter-node connection with shared OLS: $node1_id ↔ $node2_id")
     
     # Check if nodes have OXC
@@ -29,8 +28,8 @@ function create_inter_node_connection_with_shared_ols(sdn::TeraflowSDN, node1_id
     if node1_has_oxc
         for ep_idx in 1:2
             try
-                # Get available OXC endpoint from node1
-                oxc_ep_key, oxc_ep_uuid = get_available_oxc_endpoint(sdn, node1_id)
+                # Find AVAILABLE OXC endpoint for node1 (starting after TM endpoints)
+                oxc_ep_key, oxc_ep_uuid = get_next_available_oxc_endpoint(sdn, node1_id, num_tms_node1)
                 
                 # Get available shared OLS endpoint
                 ols_ep_key, ols_ep_uuid = get_available_shared_ols_endpoint(sdn, node1_id, node2_id)
@@ -76,8 +75,8 @@ function create_inter_node_connection_with_shared_ols(sdn::TeraflowSDN, node1_id
     if node2_has_oxc
         for ep_idx in 1:2
             try
-                # Get available OXC endpoint from node2
-                oxc_ep_key, oxc_ep_uuid = get_available_oxc_endpoint(sdn, node2_id)
+                # Find AVAILABLE OXC endpoint for node2 (starting after TM endpoints)
+                oxc_ep_key, oxc_ep_uuid = get_next_available_oxc_endpoint(sdn, node2_id, num_tms_node2)
                 
                 # Get available shared OLS endpoint
                 ols_ep_key, ols_ep_uuid = get_available_shared_ols_endpoint(sdn, node1_id, node2_id)
@@ -124,14 +123,20 @@ function create_inter_node_connection_with_shared_ols(sdn::TeraflowSDN, node1_id
     return success_count == expected_links
 end
 
-
 """
     connect_all_inter_node_with_shared_ols(sdn::TeraflowSDN, nodeviews) → Int
 Create all inter-node connections with shared OLS devices.
 Creates shared OLS for all node pairs, but only creates links for nodes that have OXC devices.
 """
 function connect_all_inter_node_with_shared_ols(sdn::TeraflowSDN, nodeviews)
+    println("🌐 Creating inter-node connections with shared OLS...")
     links_created = 0
+    
+    # Create nodeview lookup for TM counting - HANDLE NOTHING CASE
+    node_lookup = Dict{Int, Any}()
+    for nodeview in nodeviews
+        node_lookup[nodeview.nodeproperties.localnode] = nodeview
+    end
     
     # Get all nodes that have OXC devices
     oxc_nodes = Set{Int}()
@@ -168,14 +173,31 @@ function connect_all_inter_node_with_shared_ols(sdn::TeraflowSDN, nodeviews)
                 if link_pair ∉ processed_pairs
                     push!(processed_pairs, link_pair)
                     
+                    # Calculate TM counts for endpoint calculation - SAFE HANDLING
+                    num_tms_node1 = 0
+                    num_tms_node2 = 0
+                    
+                    if haskey(node_lookup, link_pair[1])
+                        nodeview1 = node_lookup[link_pair[1]]
+                        if nodeview1.transmissionmoduleviewpool !== nothing
+                            num_tms_node1 = length(nodeview1.transmissionmoduleviewpool)
+                        end
+                    end
+                    
+                    if haskey(node_lookup, link_pair[2])
+                        nodeview2 = node_lookup[link_pair[2]]
+                        if nodeview2.transmissionmoduleviewpool !== nothing
+                            num_tms_node2 = length(nodeview2.transmissionmoduleviewpool)
+                        end
+                    end
+                    
                     # Check if both nodes have OXC devices
                     node1_has_oxc = link_pair[1] in oxc_nodes
                     node2_has_oxc = link_pair[2] in oxc_nodes
                     
                     if node1_has_oxc || node2_has_oxc
                         # At least one node has OXC, proceed with connection
-                        # But modify the existing function to handle missing OXC gracefully
-                        if create_inter_node_connection_with_shared_ols(sdn, link_pair[1], link_pair[2]; link_type=:fiber)
+                        if create_inter_node_connection_with_shared_ols(sdn, link_pair[1], link_pair[2], num_tms_node1, num_tms_node2; link_type=:fiber)
                             expected_links = (node1_has_oxc ? 2 : 0) + (node2_has_oxc ? 2 : 0)
                             links_created += expected_links
                         end

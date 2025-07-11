@@ -254,19 +254,19 @@ function build_config_rules(oxc::MINDFul.OXCView, nodeview::MINDFul.NodeView)
     
     # Map switch reservations to media channels
     for (uuid, lli) in oxc.switchreservations
-        # Generate a descriptive channel name based on LLI fields, without spectrum slots in the name
-        if lli.localnode_input != 0 && lli.adddropport == 0 && lli.localnode_output != 0
+        # Generate channel name
+        if oxclli.localnode_input != 0 && oxclli.adddropport == 0 && oxclli.localnode_output != 0
             # Optical bypass: input node to output node
-            channel_name = "bypass-$(lli.localnode_input)-$(lli.localnode_output)"
-        elseif lli.localnode_input == 0 && lli.adddropport != 0 && lli.localnode_output != 0
+            channel_name = "bypass-node-$(oxclli.localnode_input)-input-port-node-$(oxclli.localnode_output)-output-port"
+        elseif oxclli.localnode_input == 0 && oxclli.adddropport != 0 && oxclli.localnode_output != 0
             # Add: adddrop port to output node
-            channel_name = "add-$(lli.adddropport)-to-$(lli.localnode_output)"
-        elseif lli.localnode_input != 0 && lli.adddropport != 0 && lli.localnode_output == 0
+            channel_name = "add-adddrop-port-$(oxclli.adddropport)-to-node-$(oxclli.localnode_output)-output-port"
+        elseif oxclli.localnode_input != 0 && oxclli.adddropport != 0 && oxclli.localnode_output == 0
             # Drop: input node to adddrop port
-            channel_name = "drop-$(lli.localnode_input)-to-$(lli.adddropport)"
-        elseif lli.localnode_input == 0 && lli.adddropport != 0 && lli.localnode_output == 0
+            channel_name = "drop-node-$(oxclli.localnode_input)-input-port-to-adddrop-port-$(oxclli.adddropport)"
+        elseif oxclli.localnode_input == 0 && oxclli.adddropport != 0 && oxclli.localnode_output == 0
             # Add/drop port reservation only
-            channel_name = "adddrop-$(lli.adddropport)"
+            channel_name = "adddrop-$(oxclli.adddropport)"
         else
             # Fallback to uuid if schema is unknown
             channel_name = string(uuid)
