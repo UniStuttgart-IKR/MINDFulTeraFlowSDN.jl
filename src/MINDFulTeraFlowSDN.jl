@@ -1,7 +1,7 @@
 module MINDFulTeraFlowSDN
 
 # 1. All imports at the top level
-using ProtoBuf, JSON3, StructTypes, Oxygen, HTTP, UUIDs, JLD2, MINDFul
+using ProtoBuf, JSON3, StructTypes, Oxygen, HTTP, UUIDs, JLD2, MINDFul, Graphs
 using ProtoBuf: OneOf  # for public export
 
 # 2. All constants at the top level

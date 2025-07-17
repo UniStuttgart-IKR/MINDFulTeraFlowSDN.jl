@@ -709,9 +709,9 @@ end
 """
 $(TYPEDSIGNATURES)
 Set Link Operating State Hook - enables/disables link via TeraFlow
+Handles bidirectional edges that share the same OLS device
 """
 function MINDFul.setlinkstate!(sdn::TeraflowSDN, oxcview::OXCView, edge::Edge, operatingstate::Bool)
-
     src_node = Graphs.src(edge)
     dst_node = Graphs.dst(edge)
 
@@ -725,20 +725,50 @@ function MINDFul.setlinkstate!(sdn::TeraflowSDN, oxcview::OXCView, edge::Edge, o
     end
     ols_uuid = sdn.device_map[ols_key]
 
-    # 2. build a human-readable key for the list-entry
-    path = "/link-state/edge-$(src_node)-$(dst_node)/config"
+    # 2. Check if reverse edge exists and get current state
+    reverse_edge = Edge(dst_node, src_node)
+    has_reverse = haskey(oxcview.linkstates, reverse_edge)
+    
+    # Get current state of reverse edge if it exists
+    reverse_state = if has_reverse
+        !isempty(oxcview.linkstates[reverse_edge]) ? 
+        last(oxcview.linkstates[reverse_edge])[2] : false
+    else
+        false
+    end
 
-    # 3. push the rule
-    rule = _custom_rule(path,
+    # 3. Build rules for both directions
+    rules = []
+    
+    # Forward direction rule
+    forward_path = "/link-state/edge-$(src_node)-$(dst_node)/config"
+    push!(rules, _custom_rule(forward_path,
         Dict("src"     => src_node,
              "dest"    => dst_node,
-             "enabled" => operatingstate))
+             "enabled" => operatingstate)))
 
-    ok = add_config_rule!(sdn.api_url, ols_uuid, [rule])
+    # Reverse direction rule (if reverse edge exists)
+    if has_reverse
+        reverse_path = "/link-state/edge-$(dst_node)-$(src_node)/config"
+        push!(rules, _custom_rule(reverse_path,
+            Dict("src"     => dst_node,
+                 "dest"    => src_node,
+                 "enabled" => reverse_state)))
+    end
 
-    println(ok ? "✓" : "✗",
-            " TeraFlow: link $src_node → $dst_node set ",
-            operatingstate ? "UP" : "DOWN")
+    # 4. Apply all rules to the same OLS device
+    ok = add_config_rule!(sdn.api_url, ols_uuid, rules)
+
+    if ok
+        println("✓ TeraFlow: link $src_node → $dst_node set ", 
+                operatingstate ? "UP" : "DOWN")
+        if has_reverse
+            println("✓ TeraFlow: maintaining reverse link $dst_node → $src_node state: ",
+                    reverse_state ? "UP" : "DOWN")
+        end
+    else
+        println("✗ TeraFlow: failed to update link state for $src_node ↔ $dst_node")
+    end
 
     return ok ? ReturnCodes.SUCCESS : ReturnCodes.FAIL
 end

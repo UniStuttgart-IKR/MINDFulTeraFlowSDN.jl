@@ -476,3 +476,99 @@ function build_config_rules(tm::MINDFul.TransmissionModuleView; node_id::Int, tm
 
     return rules
 end
+
+"""
+Build link state configuration rules for shared OLS devices based on OXC views.
+This function should be called AFTER all devices and links are created.
+"""
+function build_and_apply_linkstate_rules!(sdn::TeraflowSDN, nodeviews)
+    println("\n🔗 Applying link states to shared OLS devices...")
+    
+    # Collect ALL unique edges with their current states
+    unique_edges = Dict{Edge, Bool}()
+    
+    # Go through every OXC view and collect ALL edges
+    for nodeview in nodeviews
+        if nodeview.oxcview !== nothing
+            for (edge, state_history) in nodeview.oxcview.linkstates
+                if !isempty(state_history)
+                    # Get the latest state (Bool) - last entry in history
+                    current_state = last(state_history)[2]
+                    
+                    # Store this edge with its current state
+                    # This automatically handles duplicates - if edge appears in multiple OXC views,
+                    # the last one processed will be used (should be the same anyway)
+                    unique_edges[edge] = current_state
+                end
+            end
+        end
+    end
+    
+    println("Found $(length(unique_edges)) unique edges across all OXC views")
+    
+    # Group edges by node pairs for shared OLS devices
+    linkstate_groups = Dict{Tuple{Int,Int}, Vector{Tuple{Edge, Bool}}}()
+    
+    for (edge, current_state) in unique_edges
+        src_node = Graphs.src(edge)
+        dst_node = Graphs.dst(edge)
+        
+        # Create sorted node pair key for shared OLS lookup
+        node_pair = sort([src_node, dst_node])
+        pair_key = (node_pair[1], node_pair[2])
+        
+        # Add to group
+        if !haskey(linkstate_groups, pair_key)
+            linkstate_groups[pair_key] = []
+        end
+        push!(linkstate_groups[pair_key], (edge, current_state))
+    end
+    
+    println("Grouped into $(length(linkstate_groups)) node pairs for shared OLS devices")
+    
+    # Apply link states to each shared OLS device
+    applied_count = 0
+    total_api_calls = 0
+    
+    for (node_pair, edge_states) in linkstate_groups
+        # Find the shared OLS device for this node pair
+        ols_key = (node_pair[1], node_pair[2], :shared_ols)
+        
+        if haskey(sdn.device_map, ols_key)
+            ols_uuid = sdn.device_map[ols_key]
+            
+            # Build rules for ALL edges in this node pair
+            rules = []
+            for (edge, current_state) in edge_states
+                src_node = Graphs.src(edge)
+                dst_node = Graphs.dst(edge)
+                
+                # Create link state rule for this specific edge
+                link_path = "/link-state/edge-$(src_node)-$(dst_node)/config"
+                push!(rules, _custom_rule(link_path,
+                    Dict("src" => src_node,
+                         "dest" => dst_node,
+                         "enabled" => current_state)))
+            end
+            
+            # Apply ALL rules to this shared OLS device in ONE API call
+            if !isempty(rules)
+                success = add_config_rule!(sdn.api_url, ols_uuid, rules)
+                total_api_calls += 1
+                
+                if success
+                    applied_count += length(rules)
+                    println("✓ Applied $(length(rules)) link states to shared OLS $(node_pair[1])↔$(node_pair[2])")
+                else
+                    @warn "✗ Failed to apply link states to shared OLS $(node_pair[1])↔$(node_pair[2])"
+                end
+            end
+        else
+            @warn "Shared OLS device not found for nodes $(node_pair[1])↔$(node_pair[2])"
+        end
+    end
+    
+    println("✅ Applied $applied_count link state rules to shared OLS devices")
+    println("📊 Total API calls made: $total_api_calls")
+    return applied_count
+end
