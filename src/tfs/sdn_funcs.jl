@@ -5,7 +5,7 @@ using MINDFul: ReturnCodes, UUID
 using MINDFul: getreservations, getrouterportindex, getportnumber, getadddropport, getadddropportnumber
 using MINDFul: getlocalnode_input, getlocalnode_output, getspectrumslotsrange, isreservationvalid
 using MINDFul: gettransmissionmoduleviewpoolindex, gettransmissionmoduleviewpool, gettransmissionmodesindex, gettransmissionmodes
-
+using MINDFul: Edge
 using DocStringExtensions
 using JSON3
 
