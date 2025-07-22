@@ -6,6 +6,7 @@ using MINDFul: getreservations, getrouterportindex, getportnumber, getadddroppor
 using MINDFul: getlocalnode_input, getlocalnode_output, getspectrumslotsrange, isreservationvalid
 using MINDFul: gettransmissionmoduleviewpoolindex, gettransmissionmoduleviewpool, gettransmissionmodesindex, gettransmissionmodes
 using MINDFul: Edge
+using MINDFul: setoxcviewlinkavailabilities!
 using DocStringExtensions
 using JSON3
 
@@ -489,6 +490,14 @@ function MINDFul.insertreservationhook!(sdn::TeraflowSDN, oxcview::OXCView, dagn
     
     if success
         verbose && println("✓ TeraFlow: Configured OXC channel $channel_name")
+
+        # ✅ UPDATE SPECTRUM AVAILABILITY (this was missing!)
+        spectrum_result = setoxcviewlinkavailabilities!(oxcview, oxclli, false; verbose)
+        if !MINDFul.issuccess(spectrum_result)
+            verbose && @warn "Failed to update spectrum availability"
+            return ReturnCodes.FAIL
+        end
+
         return ReturnCodes.SUCCESS
     else
         verbose && @warn "✗ TeraFlow: Failed to configure OXC channel $channel_name"
@@ -594,6 +603,14 @@ function MINDFul.deletereservationhook!(sdn::TeraflowSDN, oxcview::OXCView, dagn
     
     if success
         verbose && println("✓ TeraFlow: Removed OXC channel $channel_name")
+
+        # ✅ RESTORE SPECTRUM AVAILABILITY (this was missing!)
+        spectrum_result = setoxcviewlinkavailabilities!(oxcview, oxclli, true; verbose)
+        if !MINDFul.issuccess(spectrum_result)
+            verbose && @warn "Failed to restore spectrum availability"
+            return ReturnCodes.FAIL
+        end
+
         return ReturnCodes.SUCCESS
     else
         verbose && @warn "✗ TeraFlow: Failed to remove OXC channel $channel_name"
@@ -716,7 +733,7 @@ function MINDFul.setlinkstate!(sdn::TeraflowSDN, oxcview::OXCView, edge::Edge, o
     dst_node = Graphs.dst(edge)
 
     # 1. locate the shared OLS device that belongs to this node pair
-    a, b = sort((src_node, dst_node))                 # low, high
+    a, b = src_node <= dst_node ? (src_node, dst_node) : (dst_node, src_node)                 # low, high
     ols_key = (a, b, :shared_ols)
 
     if !haskey(sdn.device_map, ols_key)
