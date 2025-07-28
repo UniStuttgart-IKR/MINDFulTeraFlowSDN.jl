@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.5"
+julia_version = "1.11.6"
 manifest_format = "2.0"
 project_hash = "1654689b2978d08a1097a9794b7366233877f0d4"
 
@@ -300,8 +300,8 @@ weakdeps = ["JET", "Test"]
     TestModule = ["JET", "Test"]
 
 [[deps.MINDFulTeraFlowSDN]]
-deps = ["DocStringExtensions", "Graphs", "HTTP", "JLD2", "JSON3", "MINDFul", "Oxygen", "ProtoBuf", "StructTypes", "UUIDs"]
-git-tree-sha1 = "459a3d38b028f1c1cb47e7bfc4fd880f11edced5"
+deps = ["Dates", "DocStringExtensions", "Graphs", "HTTP", "JLD2", "JSON3", "MINDFul", "Oxygen", "ProtoBuf", "StructTypes", "UUIDs"]
+git-tree-sha1 = "970a8c1a2358ef09a68174c3c4721f1e554e8c4a"
 repo-rev = "main"
 repo-url = ".."
 uuid = "550e8400-e29b-41d4-a716-446655440000"

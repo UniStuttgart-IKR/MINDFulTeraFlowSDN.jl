@@ -20,35 +20,38 @@ ibnfhandlers = MINDF.AbstractIBNFHandler[]
 sdncontroller = TeraflowSDN()
 load_device_map!("data/device_map.jld2", sdncontroller)
 
-# Now call the full constructor
-ibnf1 = MINDF.IBNFramework(operationmode, ibnfid, intentdag, ibnag1, ibnfhandlers, sdncontroller)
+# Create IBNFCommunication from handlers (missing parameter)
+ibnfcomm = MINDF.IBNFCommunication(nothing, ibnfhandlers)
+
+# Now call the full constructor with correct parameters
+ibnf1 = MINDF.IBNFramework(operationmode, ibnfid, intentdag, ibnag1, ibnfcomm, sdncontroller)
 
 ibnag = MINDF.getibnag(ibnf1)                       
 nodeviews = MINDF.getnodeviews(ibnag)
 println("Loaded IBN graph with $(length(nodeviews)) nodeviews")
 
-println("\n=== Creating Devices ===")
-for nodeview in nodeviews
-    # If you want to see which node: 
-    println("Processing node: ", nodeview.nodeproperties.localnode)  # if nodeview has a getnode method
-    push_node_devices_to_tfs(nodeview, sdncontroller)
-end
+# println("\n=== Creating Devices ===")
+# for nodeview in nodeviews
+#     # If you want to see which node: 
+#     println("Processing node: ", nodeview.nodeproperties.localnode)  # if nodeview has a getnode method
+#     push_node_devices_to_tfs(nodeview, sdncontroller)
+# end
 
-println("\n=== Saving Device Map ===")
-save_device_map("data/device_map.jld2", sdncontroller)
-println("✓ Device map saved with $(length(sdncontroller.device_map)) entries")
+# println("\n=== Saving Device Map ===")
+# save_device_map("data/device_map.jld2", sdncontroller)
+# println("✓ Device map saved with $(length(sdncontroller.device_map)) entries")
 
-# Create all network links after devices are created
-intra_links, inter_links = create_all_network_links(sdncontroller, nodeviews)
+# # Create all network links after devices are created
+# intra_links, inter_links = create_all_network_links(sdncontroller, nodeviews)
 
-println("\n=== Final Save ===")
-save_device_map("data/device_map.jld2", sdncontroller)
-println("✓ Final device map saved with all devices and links")
+# println("\n=== Final Save ===")
+# save_device_map("data/device_map.jld2", sdncontroller)
+# println("✓ Final device map saved with all devices and links")
 
-println("\n=== Process Complete ===")
-println("Total devices and endpoints: $(length(sdncontroller.device_map))")
-println("Total intra-node links: $(length(sdncontroller.intra_link_map))")
-println("Total inter-node links: $(length(sdncontroller.inter_link_map))")
-println("Intra-node links created: $intra_links") 
-println("Inter-node links created: $inter_links")
-println("Link states applied to shared OLS devices")
+# println("\n=== Process Complete ===")
+# println("Total devices and endpoints: $(length(sdncontroller.device_map))")
+# println("Total intra-node links: $(length(sdncontroller.intra_link_map))")
+# println("Total inter-node links: $(length(sdncontroller.inter_link_map))")
+# println("Intra-node links created: $intra_links") 
+# println("Inter-node links created: $inter_links")
+# println("Link states applied to shared OLS devices")
