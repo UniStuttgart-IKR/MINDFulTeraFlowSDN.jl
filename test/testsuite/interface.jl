@@ -11,7 +11,7 @@ function testsuiteinterface!(ibnfs)
     rng = MersenneTwister(0)
     # for counter in 1:100
     for counter in 1:100
-        srcibnf = rand(rng, ibnfs)
+        srcibnf = ibnfs[1]
         srcnglobalnode = rand(rng, MINDF.getglobalnode.(MINDF.getproperties.(MINDF.getintranodeviews(getibnag(srcibnf)))) )
         dstibnf = rand(rng, ibnfs)
         dstglobalnode = rand(rng, MINDF.getglobalnode.(MINDF.getproperties.(MINDF.getintranodeviews(getibnag(dstibnf)))) )

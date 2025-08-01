@@ -255,7 +255,7 @@ if context_success
                 Ctx.ContextId(Ctx.Uuid(admin_context_uuid)),
                 Ctx.Uuid(target_topology_uuid)
             ),
-            "expected_topology",  # name
+            "admin",  # name
             Ctx.DeviceId[],  # device_ids (empty initially)
             Ctx.LinkId[],    # link_ids (empty)
             Ctx.LinkId[]     # optical_link_ids (empty)

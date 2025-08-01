@@ -698,8 +698,11 @@ function run_focused_verification()
         return nothing
     end
     
-    # Create framework
-    ibnf1 = MINDF.IBNFramework(operationmode, ibnfid, intentdag, ibnag1, ibnfhandlers, sdncontroller)
+    # Create IBNFCommunication from handlers (missing parameter)
+    ibnfcomm = MINDF.IBNFCommunication(nothing, ibnfhandlers)
+
+    # Now call the full constructor with correct parameters
+    ibnf1 = MINDF.IBNFramework(operationmode, ibnfid, intentdag, ibnag1, ibnfcomm, sdncontroller)
     ibnag = MINDF.getibnag(ibnf1)
     nodeviews = MINDF.getnodeviews(ibnag)
     
