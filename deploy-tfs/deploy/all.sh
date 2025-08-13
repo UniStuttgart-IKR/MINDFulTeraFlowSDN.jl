@@ -203,6 +203,9 @@ export GRAF_EXT_PORT_HTTP=${GRAF_EXT_PORT_HTTP:-"3000"}
 # Automated steps start here
 ########################################################################################################################
 
+# Patch gRPC message size limits
+./deploy/patch_grpc_message_size.sh patch
+
 # Deploy CockroachDB
 ./deploy/crdb.sh
 
