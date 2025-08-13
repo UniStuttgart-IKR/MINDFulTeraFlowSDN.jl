@@ -1,6 +1,7 @@
 module MINDFulTeraFlowSDN
 
 # 1. All imports at the top level
+import AttributeGraphs as AG
 using ProtoBuf, JSON3, StructTypes, Oxygen, HTTP, UUIDs, JLD2, MINDFul, Graphs
 using ProtoBuf: OneOf  # for public export
 
@@ -16,10 +17,12 @@ export TeraflowSDN, OneOf, Ctx,
        connect_all_intra_node_devices, connect_all_inter_node_with_shared_ols, create_all_network_links,
        save_device_map, load_device_map!, stable_uuid,
        create_router_tm_link, create_tm_oxc_link, create_inter_node_connection_with_shared_ols,
-       calculate_oxc_endpoint_needs, create_shared_ols_device, _to_speed_enum
+       calculate_oxc_endpoint_needs, create_shared_ols_device, _to_speed_enum,
+       setup_context_topology, create_graph_with_devices, verify_tfs_deployment
 
 # 4. Include sub-modules (order matters)
 include("api/api.jl")
 include("tfs/tfs_types.jl")
+include("setup.jl")  # Add the new setup module
 
 end # module MINDFulTeraFlowSDN
