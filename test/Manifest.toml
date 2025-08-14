@@ -633,20 +633,20 @@ uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
 version = "1.1.0"
 
 [[deps.MINDFul]]
-deps = ["AttributeGraphs", "DataStructures", "Dates", "DocStringExtensions", "EnumX", "Graphs", "HTTP", "IterTools", "JLD2", "JSON", "MbedTLS", "Oxygen", "Printf", "Serialization", "Sockets", "SwaggerMarkdown", "TOML", "UUIDs", "Unitful", "UnitfulData"]
-git-tree-sha1 = "be0dc80a7d315083e5ca2726f62f5fe78ed58506"
+deps = ["AttributeGraphs", "Base64", "DataStructures", "Dates", "DocStringExtensions", "EnumX", "Graphs", "HTTP", "IterTools", "JLD2", "JSON", "MbedTLS", "Oxygen", "Printf", "Serialization", "Sockets", "SwaggerMarkdown", "TOML", "UUIDs", "Unitful", "UnitfulData"]
+git-tree-sha1 = "05b4244e73067bcb91a4c6c17351fd9a2a5e4bbe"
 repo-rev = "main"
 repo-url = "https://github.com/UniStuttgart-IKR/MINDFul.jl.git"
 uuid = "437ce7a4-cd80-4539-9a29-b274cfe157d6"
 version = "0.4.0"
-weakdeps = ["JET", "Test"]
+weakdeps = ["JET", "Random", "Test"]
 
     [deps.MINDFul.extensions]
-    TestModule = ["JET", "Test"]
+    TestModule = ["JET", "Test", "Random"]
 
 [[deps.MINDFulTeraFlowSDN]]
-deps = ["Dates", "DocStringExtensions", "Graphs", "HTTP", "JLD2", "JSON3", "MINDFul", "Oxygen", "ProtoBuf", "StructTypes", "UUIDs"]
-git-tree-sha1 = "970a8c1a2358ef09a68174c3c4721f1e554e8c4a"
+deps = ["AttributeGraphs", "Dates", "DocStringExtensions", "Graphs", "HTTP", "JLD2", "JSON3", "MINDFul", "Oxygen", "ProtoBuf", "StructTypes", "UUIDs"]
+git-tree-sha1 = "f11f9861c13ba5bdbf1b7ca658d65b7a58a9f549"
 repo-rev = "main"
 repo-url = ".."
 uuid = "550e8400-e29b-41d4-a716-446655440000"
