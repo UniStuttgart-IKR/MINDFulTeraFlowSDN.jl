@@ -199,7 +199,7 @@ function main()
     end
 
     if localport == 8081
-        #@show ibnfs[1].ibnfhandlers
+        #@show ibnfs[1].ibnfhandlersss
         conintent_bordernode = MINDFul.ConnectivityIntent(MINDFul.GlobalNode(UUID(1), 4), MINDFul.GlobalNode(UUID(3), 25), u"100.0Gbps")
         intentuuid_bordernode = MINDFul.addintent!(ibnf, conintent_bordernode, MINDFul.NetworkOperator())
 
