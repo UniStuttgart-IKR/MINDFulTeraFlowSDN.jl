@@ -1,0 +1,12 @@
+Manifest.toml
+*.html
+*.pdf
+*.json
+*.cert
+*.key
+*.pem
+*.b64
+.vscode/
+docs/build/
+*.cov
+MYREADME.md

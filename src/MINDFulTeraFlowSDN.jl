@@ -4,6 +4,7 @@ module MINDFulTeraFlowSDN
 import AttributeGraphs as AG
 using ProtoBuf, JSON3, StructTypes, Oxygen, HTTP, UUIDs, JLD2, MINDFul, Graphs
 using ProtoBuf: OneOf  # for public export
+using Unitful, UnitfulData, TOML
 
 # 2. All constants at the top level
 const TFS_UUID_NAMESPACE = UUID("e2f3946f-1d0b-4aee-9e98-7d2b1862c287")
@@ -24,5 +25,6 @@ export TeraflowSDN, OneOf, Ctx,
 include("api/api.jl")
 include("tfs/tfs_types.jl")
 include("setup.jl")  # Add the new setup module
+include("main.jl")
 
 end # module MINDFulTeraFlowSDN
