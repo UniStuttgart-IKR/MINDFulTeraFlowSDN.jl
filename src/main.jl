@@ -1,126 +1,3 @@
-# """
-# $(TYPEDSIGNATURES)
-# Function to check if a given file path is absolute or relative.
-# If it is relative, it will be joined with the given directory name.
-# """
-# function checkfilepath(directoryname::String, filepath::String)
-#     if startswith(filepath, "/")
-#         return filepath
-#     else
-#         return joinpath(directoryname, filepath)
-#     end
-# end
-
-# """
-# $(TYPEDSIGNATURES)
-# Function to check if openSSL is installed on the system.
-# It runs the `openssl version` command and checks if it succeeds.
-# If it fails, it prints an error message and exits.
-# """
-# function checkifopensslinstalled()
-#     try
-#         run(pipeline(`openssl version`, stdout = devnull, stderr = devnull))
-#         return true
-#     catch e
-#         println("OpenSSL is not installed. Please install OpenSSL to generate keys and certificates.")
-#         return false
-#     end
-# end
-
-# """
-# $(TYPEDSIGNATURES)
-# Function to generate a self-signed TLS certificate and corresponding private key.
-# """
-# function generateTLScertificate()
-#     if !checkifopensslinstalled()
-#         exit(1)
-#     end
-
-#     return if !isfile("selfsignedTLS.key") || !isfile("selfsignedTLS.cert")
-#         cmd = `openssl req -x509 -nodes -newkey rsa:2048 -keyout selfsignedTLS.key -out selfsignedTLS.cert -subj "/CN=localhost"`
-#         run(pipeline(cmd, stdout = devnull, stderr = devnull))
-#     end
-# end
-
-# """
-# $(TYPEDSIGNATURES)
-# Function to generate RSA keys (only used for testing).
-# In real scenarios, private keys must be previously generated and public keys must be shared accordingly.
-# """
-# function generateRSAkeys(configdir::String)
-#     if !checkifopensslinstalled()
-#         exit(1)
-#     end
-
-#     currentdir = pwd()
-#     cd(configdir)
-
-#     if !isfile("rsa_priv1.pem") || !isfile("rsa_pub1.pem") || !isfile("rsa_priv2.pem") || !isfile("rsa_pub2.pem") || !isfile("rsa_priv3.pem") || !isfile("rsa_pub3.pem")
-#         cmds = [
-#             `openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -pkeyopt rsa_keygen_pubexp:3 -out rsa_priv1.pem`,
-#             `openssl pkey -in rsa_priv1.pem -out rsa_pub1.pem -pubout`,
-#             `openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -pkeyopt rsa_keygen_pubexp:3 -out rsa_priv2.pem`,
-#             `openssl pkey -in rsa_priv2.pem -out rsa_pub2.pem -pubout`,
-#             `openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -pkeyopt rsa_keygen_pubexp:3 -out rsa_priv3.pem`,
-#             `openssl pkey -in rsa_priv3.pem -out rsa_pub3.pem -pubout`,
-#         ]
-
-#         # Run openssl comands silencing stderr for genpkey output
-#         for cmd in cmds
-#             if occursin("genpkey", string(cmd))
-#                 run(pipeline(cmd, stderr = devnull))
-#             else
-#                 run(cmd)
-#             end
-#         end
-#     end
-
-#     return cd(currentdir)
-# end
-
-# """
-# $(TYPEDSIGNATURES)
-# Function to read a base64 encoded key from a PEM file.
-# """
-# function readb64keys(finalkeyfile::String)
-#     lines = readlines(finalkeyfile)
-#     return join(filter(line -> !startswith(line, "-----"), lines))
-# end
-
-# """
-# $(TYPEDSIGNATURES)
-# Function to convert a base64 encoded key to PEM format.
-# The `typeofkey` parameter should be either "PUBLIC KEY" or "PRIVATE KEY".
-# """
-# function convertb64keytopem(keyb64::String, typeofkey::String)
-#     return """
-#     -----BEGIN $typeofkey-----
-#     $keyb64
-#     -----END $typeofkey-----
-#     """
-# end
-
-# """
-# $(TYPEDSIGNATURES)
-# Function to perform RSA encryption on a secret using the public key of the remote IBNF.
-# """
-# function rsaauthentication_encrypt(remoteibnfhandler::RemoteHTTPHandler, unencryptedsecret::String)
-#     remotepublickeyb64 = getibnfhandlerrsapublickey(remoteibnfhandler)
-#     remotepublickeypem = convertb64keytopem(remotepublickeyb64, HTTPMessages.KEY_TYPEOFPUBLICKEY)
-
-#     pk_ctx = MbedTLS.PKContext()
-#     MbedTLS.parse_public_key!(pk_ctx, remotepublickeypem)
-
-#     secretbytes = Vector{UInt8}(codeunits(unencryptedsecret))
-
-#     rng = MbedTLS.CtrDrbg()
-#     entropy = MbedTLS.Entropy()
-#     MbedTLS.seed!(rng, entropy, Vector{UInt8}("RSAAuth"))
-
-#     encrypted = zeros(UInt8, 256)
-#     MbedTLS.encrypt!(pk_ctx, secretbytes, encrypted, rng)
-#     return base64encode(encrypted)
-# end
 
 """
 $(TYPEDSIGNATURES)
@@ -181,11 +58,12 @@ function main()
     end
 
 
-    if localport == 8083
-        sdncontroller = TeraflowSDN()
-    else
-        sdncontroller = TeraflowSDN()
-    end
+    # if localport == 8083
+    #     sdncontroller = TeraflowSDN()
+    # else
+    #     sdncontroller = TeraflowSDN()
+    # end
+    sdncontroller = TeraflowSDN()
 
     ibnfsdict = Dict{Int, MINDF.IBNFramework}()
     ibnf = nothing
@@ -203,10 +81,10 @@ function main()
         conintent_bordernode = MINDFul.ConnectivityIntent(MINDFul.GlobalNode(UUID(1), 4), MINDFul.GlobalNode(UUID(3), 25), u"100.0Gbps")
         intentuuid_bordernode = MINDFul.addintent!(ibnf, conintent_bordernode, MINDFul.NetworkOperator())
 
-        MINDFul.compileintent!(ibnf, intentuuid_bordernode, MINDFul.KShorestPathFirstFitCompilation(10))
+        @show MINDFul.compileintent!(ibnf, intentuuid_bordernode, MINDFul.KShorestPathFirstFitCompilation(10))
         
         # install
-        MINDFul.installintent!(ibnf, intentuuid_bordernode; verbose)
+        @show MINDFul.installintent!(ibnf, intentuuid_bordernode; verbose)
 
         # uninstall
         MINDFul.uninstallintent!(ibnf, intentuuid_bordernode; verbose)

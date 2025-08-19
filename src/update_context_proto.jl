@@ -1,7 +1,7 @@
 using ProtoBuf
 
-local_proto_dir = "/home/kshpthk/controller/proto" # use original env variable
-output_dir = "/home/kshpthk/MINDFulTeraFlowSDN.jl/src/api/proto" # make it relative
+local_proto_dir = "/home/fbgmrtnz/controller/proto" # use original env variable
+output_dir = "/home/fbgmrtnz/workspace1069/MINDFulTeraFlowSDN.jl/src/api/proto" # make it relative
 
 # Ensure the output directory exists
 if !isdir(output_dir)

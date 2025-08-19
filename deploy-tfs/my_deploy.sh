@@ -17,7 +17,7 @@
 # ----- TeraFlowSDN ------------------------------------------------------------
 
 # Set the path to the controller folder
-export CONTROLLER_FOLDER="/home/kshpthk/controller"
+export CONTROLLER_FOLDER="/home/fbgmrtnz/controller"
 
 # Set the URL of the internal MicroK8s Docker registry where the images will be uploaded to.
 export TFS_REGISTRY_IMAGES="http://localhost:32000/tfs/"
@@ -26,7 +26,7 @@ export TFS_REGISTRY_IMAGES="http://localhost:32000/tfs/"
 export TFS_COMPONENTS="context device pathcomp service slice nbi webui monitoring"
 
 export TFS_DEV_MODE=""
-export DEVSPACE_CONFIG="/home/kshpthk/ma1024/tfs/devspace.yaml"
+export DEVSPACE_CONFIG="/home/fbgmrtnz/ma1069/tfs/devspace.yaml"
 
 # Uncomment to activate Monitoring (old)
 #export TFS_COMPONENTS="${TFS_COMPONENTS} monitoring"

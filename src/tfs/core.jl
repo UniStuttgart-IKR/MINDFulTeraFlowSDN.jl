@@ -20,7 +20,7 @@ struct TeraflowSDN <: MINDFul.AbstractSDNController
 end
 
 TeraflowSDN() = TeraflowSDN(
-    "http://127.0.0.1:80/tfs-api", 
+    "http://10.41.83.106:80/tfs-api", 
     Dict{Any,String}(),  # Changed from Dict{Tuple{Int,Symbol},String}()
     Dict{Tuple{Int,Symbol},String}(),
     Dict{NTuple{6,Any},String}(),
