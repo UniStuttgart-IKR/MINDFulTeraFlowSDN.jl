@@ -58,12 +58,8 @@ function main()
     end
 
 
-    # if localport == 8083
-    #     sdncontroller = TeraflowSDN()
-    # else
-    #     sdncontroller = TeraflowSDN()
-    # end
     sdncontroller = TeraflowSDN()
+    load_device_map!(MAINDIR*"/test/data/device_map.jld2", sdncontroller)
 
     ibnfsdict = Dict{Int, MINDF.IBNFramework}()
     ibnf = nothing
@@ -74,25 +70,6 @@ function main()
             ibnf = MINDF.IBNFramework(ibnag, hdlr, encryption, neighbourips, sdncontroller, ibnfsdict; verbose)
             break
         end
-    end
-
-    if localport == 8091
-        #@show ibnfs[1].ibnfhandlersss
-        conintent_bordernode = MINDFul.ConnectivityIntent(MINDFul.GlobalNode(UUID(1), 4), MINDFul.GlobalNode(UUID(3), 25), u"100.0Gbps")
-        intentuuid_bordernode = MINDFul.addintent!(ibnf, conintent_bordernode, MINDFul.NetworkOperator())
-
-        @show MINDFul.compileintent!(ibnf, intentuuid_bordernode, MINDFul.KShorestPathFirstFitCompilation(10))
-        
-        # install
-        @show MINDFul.installintent!(ibnf, intentuuid_bordernode; verbose)
-
-        # uninstall
-        MINDFul.uninstallintent!(ibnf, intentuuid_bordernode; verbose)
-    
-        # uncompile
-        MINDFul.uncompileintent!(ibnf, intentuuid_bordernode; verbose)
-
-        MINDF.closeibnfserver(ibnf)
     end
 
     return if ibnf === nothing
