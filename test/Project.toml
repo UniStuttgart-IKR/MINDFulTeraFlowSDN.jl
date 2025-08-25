@@ -7,7 +7,6 @@ HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
-MINDFul = "437ce7a4-cd80-4539-9a29-b274cfe157d6"
 MINDFulTeraFlowSDN = "550e8400-e29b-41d4-a716-446655440000"
 MbedTLS = "739be429-bea8-5141-9913-cc70e7f3736d"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
@@ -18,3 +17,6 @@ TestSetExtensions = "98d24dd4-01ad-11ea-1b02-c9a08f80db04"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 UnitfulData = "479269fd-87c4-43d6-a395-02aad47d928b"
+
+[sources]
+MINDFulTeraFlowSDN = {path = ".."}
