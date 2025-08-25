@@ -1,79 +1,48 @@
-name: TFS LXD Bootstrap (via Snap)
+name: TFS LXD Bootstrap
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
     inputs:
       devspace_mode:
-        description: "Enable DEVSPACE_MODE?"
+        description: "Enable DEVSPACE_MODE? (yes/no)"
         required: false
         default: "no"
+  push:
+    branches: [ main ]
 
 jobs:
-  tfs-bootstrap:
+  bootstrap:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
 
-    permissions:
-      contents: read
-
-    env:
-      DEVSPACE_MODE: ${{ github.event.inputs.devspace_mode || 'no' }}
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Enable /dev/kvm for LXD VM support
+      # Make KVM usable for LXD VM mode on hosted Linux runners
+      - name: Enable /dev/kvm
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
-          if [ -e /dev/kvm ]; then
-            sudo chown "$USER":"$USER" /dev/kvm || true
-          fi
           ls -l /dev/kvm || (echo "ERROR: /dev/kvm not available"; exit 1)
 
-      - name: Install LXD via snap & initialize
-        run: |
-          sudo snap install lxd
-          sudo lxd init --auto
-
-      - name: Verify LXD VM capability
-        run: |
-          lxc version
-          lxc launch images:ubuntu/24.04 --vm --ephemeral vm-probe || (
-            echo "ERROR: LXD VM launch failed (KVM missing?)"; exit 1
-          )
-
-      - name: Make scripts executable
-        run: |
-          chmod +x tfs-lxd.sh bootstrap-part1.sh bootstrap-part2.sh bootstrap-julia.sh || true
-
-      - name: Execute LXD VM bootstrap
+      - name: Run TFS bootstrap script (does all installs & VM work)
         env:
-          DEVSPACE_MODE: ${{ env.DEVSPACE_MODE }}
+          DEVSPACE_MODE: ${{ github.event.inputs.devspace_mode || 'no' }}
         run: |
           set -euxo pipefail
-          echo "DEVSPACE_MODE=${DEVSPACE_MODE}"
+          chmod +x ./tfs-lxd.sh
+          # Script installs snapd/LXD if needed, runs lxd init, launches Ubuntu 24.04 VM,
+          # runs MicroK8s + addons, deploys TFS, then the Julia bootstrap.
           bash ./tfs-lxd.sh
 
-      - name: Collect logs and artifacts
-        if: always()
-        run: |
-          mkdir -p artifacts
-          sudo tar -C /var/snap/lxd/common/lxd/logs -czf artifacts/lxd-logs.tgz . || true
-          if lxc info tfs-vm >/dev/null 2>&1; then
-            lxc exec tfs-vm -- microk8s status --wait-ready || true
-            lxc file pull -r tfs-vm/var/snap/microk8s/common/var/log artifacts/microk8s-logs || true
-            lxc file pull -r tfs-vm/var/log artifacts/vm-varlog || true
-            lxc file pull -r tfs-vm/home/tfsuser artifacts/tfsuser-home || true
-          fi
-
-      - name: Upload artifacts
+      - name: Upload artifacts (best-effort)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: tfs-logs
-          path: artifacts
+          path: |
+            artifacts
+            /var/snap/lxd/common/lxd/logs
+          if-no-files-found: ignore
