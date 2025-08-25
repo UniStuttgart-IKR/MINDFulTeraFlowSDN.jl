@@ -1,0 +1,99 @@
+name: TFS LXD Bootstrap
+
+on:
+  workflow_dispatch:
+    inputs:
+      devspace_mode:
+        description: "Set to 'yes' to enable DEVSPACE_MODE"
+        required: false
+        default: "no"
+  push:
+    branches: [ main ]
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    permissions:
+      contents: read
+
+    env:
+      DEVSPACE_MODE: ${{ github.event.inputs.devspace_mode || 'no' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Ensure /dev/kvm is accessible for KVM-backed LXD VMs
+      - name: Enable KVM device for runner user
+        shell: bash
+        run: |
+          set -euxo pipefail
+          # udev rule so /dev/kvm is writable by non-root
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+          # Fallback in case udev doesn't rewrite permissions immediately
+          if [ -e /dev/kvm ]; then
+            sudo chown "$USER":"$USER" /dev/kvm || true
+          fi
+          ls -l /dev/kvm || (echo "ERROR: /dev/kvm not available"; exit 1)
+
+      # Install & initialize the LXD snap on the hosted runner
+      - name: Install LXD (snap) and init
+        uses: canonical/setup-lxd@v0
+        with:
+          # Pin a real version or SHA in your repo for reproducibility
+          channel: 5.21/stable
+
+      - name: LXD sanity check
+        run: |
+          set -euxo pipefail
+          lxc version
+          # Verify VM capability is reported
+          lxc info | sed -n '1,120p'
+          # Optional quick KVM/VM probe (ephemeral VM boots kernel then exits)
+          lxc launch images:ubuntu/24.04 --vm --ephemeral vm-probe || (
+            echo "LXD VM launch failed (KVM missing?)"; exit 1
+          )
+          # stop is automatic for --ephemeral when instance exits
+
+      # Make your scripts executable
+      - name: Prep scripts
+        run: |
+          chmod +x ./tfs-lxd.sh
+          chmod +x ./bootstrap-part1.sh ./bootstrap-part2.sh ./bootstrap-julia.sh || true
+
+      # Run your orchestrator (creates or reuses tfs-vm, runs Part 1/2, then Julia)
+      - name: Run LXD VM bootstrap
+        env:
+          DEVSPACE_MODE: ${{ env.DEVSPACE_MODE }}
+        run: |
+          set -euxo pipefail
+          echo "DEVSPACE_MODE=${DEVSPACE_MODE}"
+          bash ./tfs-lxd.sh
+
+      # Persist useful logs/artifacts from the host and from inside the VM (best-effort)
+      - name: Collect logs
+        if: always()
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          # Grab LXD logs
+          sudo tar -C /var/snap/lxd/common/lxd/logs -czf artifacts/lxd-logs.tgz . || true
+          # Try to pull MicroK8s & TFS logs from the VM if it exists
+          if lxc info tfs-vm >/dev/null 2>&1; then
+            lxc exec tfs-vm -- microk8s status --wait-ready || true
+            lxc file pull -r tfs-vm/var/snap/microk8s/common/var/log artifacts/microk8s-logs || true
+            lxc file pull -r tfs-vm/var/log artifacts/vm-varlog || true
+            # If your deploy wrote any app logs under /home/tfsuser, pull them too
+            lxc file pull -r tfs-vm/home/tfsuser artifacts/tfsuser-home || true
+          fi
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfs-bootstrap-artifacts
+          path: artifacts
