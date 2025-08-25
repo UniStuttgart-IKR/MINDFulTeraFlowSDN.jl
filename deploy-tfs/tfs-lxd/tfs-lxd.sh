@@ -82,14 +82,16 @@ if ${USE_SUDO} lxc info "${VM_NAME}" >/dev/null 2>&1; then
   fi
 fi
 
+# Ensure there's at least one storage pool; create a simple 'default' dir pool if missing
+if ! ${USE_SUDO} lxc query /1.0/storage-pools | grep -q '/1.0/storage-pools/'; then
+  echo "[lxd] Creating default storage pool..."
+  ${USE_SUDO} lxc storage create default dir
+fi
+
 # Create VM if needed
 if [[ "$VM_EXISTS" == "false" ]]; then
   echo "[lxd] Creating new VM..."
-
-  # Find a storage pool name (fallback to 'default')
-  POOL="$(${USE_SUDO} lxc query /1.0/storage-pools \
-    | sed -n 's/.*"\/1.0\/storage-pools\/\([^"]\+\)".*/\1/p' | head -n1)"
-  [ -z "${POOL}" ] && POOL="default"
+  POOL="default"  # guaranteed to exist from the check above
 
   ${USE_SUDO} lxc launch ubuntu:24.04 "${VM_NAME}" --vm \
     -c limits.cpu=4 \
