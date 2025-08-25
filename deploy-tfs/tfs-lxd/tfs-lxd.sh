@@ -21,6 +21,20 @@ if ! ${USE_SUDO} lxc info >/dev/null 2>&1; then
   sudo lxd init --minimal
 fi
 
+# Ensure storage pool exists and is properly configured
+echo "[lxd] Checking storage pool configuration..."
+if ! ${USE_SUDO} lxc storage list --format csv | grep -q "^default,"; then
+  echo "[lxd] Creating default storage pool..."
+  ${USE_SUDO} lxc storage create default dir
+fi
+
+# Ensure default profile has root device
+echo "[lxd] Ensuring default profile has root device..."
+if ! ${USE_SUDO} lxc profile device list default | grep -q "root"; then
+  echo "[lxd] Adding root device to default profile..."
+  ${USE_SUDO} lxc profile device add default root disk path=/ pool=default
+fi
+
 # Check VM state
 VM_EXISTS=false
 PART1_COMPLETE=false
@@ -85,16 +99,27 @@ fi
 # Create VM if needed
 if [[ "$VM_EXISTS" == "false" ]]; then
   echo "[lxd] Creating new VM..."
-  ${USE_SUDO} lxc launch ubuntu:24.04 "${VM_NAME}" --vm \
+  
+  # First, try to create with custom profile that includes larger disk
+  echo "[lxd] Creating custom profile with larger disk..."
+  ${USE_SUDO} lxc profile copy default "${VM_NAME}-profile" || true
+  ${USE_SUDO} lxc profile device set "${VM_NAME}-profile" root size=100GiB || \
+  ${USE_SUDO} lxc profile device add "${VM_NAME}-profile" root disk path=/ pool=default size=100GiB || true
+  
+  # Launch VM with custom profile
+  if ${USE_SUDO} lxc launch ubuntu:24.04 "${VM_NAME}" --vm \
+    -p "${VM_NAME}-profile" \
     -c limits.cpu=4 \
     -c limits.memory=8GiB \
-    -c security.secureboot=false
-
-  # Resize root disk after creation
-  echo "[lxd] Resizing root disk to 100GiB..."
-  ${USE_SUDO} lxc config device override "${VM_NAME}" root size=100GiB || \
-  ${USE_SUDO} lxc config device add "${VM_NAME}" root disk pool=default path=/ size=100GiB || \
-  echo "[lxd] Warning: Could not resize disk, using default size"
+    -c security.secureboot=false; then
+    echo "[lxd] VM created successfully with custom profile"
+  else
+    echo "[lxd] Custom profile failed, trying with default profile..."
+    ${USE_SUDO} lxc launch ubuntu:24.04 "${VM_NAME}" --vm \
+      -c limits.cpu=4 \
+      -c limits.memory=8GiB \
+      -c security.secureboot=false
+  fi
 
   echo "[lxd] Waiting for VM to start..."
   timeout=600
