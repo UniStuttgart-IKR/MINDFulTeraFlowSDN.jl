@@ -82,25 +82,21 @@ if ${USE_SUDO} lxc info "${VM_NAME}" >/dev/null 2>&1; then
   fi
 fi
 
-# Ensure default profile has a 'root' disk device
-if ! ${USE_SUDO} lxc profile show default | grep -qE '^\s+root:'; then
-  # Grab the first storage pool name from `lxc storage list`
-  POOL="$(${USE_SUDO} lxc storage list --format csv --columns n | head -n1)"
-  # If --format csv not supported, fallback to parsing table
-  if [ -z "$POOL" ]; then
-    POOL="$(${USE_SUDO} lxc storage list | awk 'NR==4 {print $1}')"
-  fi
-  ${USE_SUDO} lxc profile device add default root disk path=/ pool="${POOL}"
-fi
-
 # Create VM if needed
 if [[ "$VM_EXISTS" == "false" ]]; then
   echo "[lxd] Creating new VM..."
+
+  # Find a storage pool name (fallback to 'default')
+  POOL="$(${USE_SUDO} lxc query /1.0/storage-pools \
+    | sed -n 's/.*"\/1.0\/storage-pools\/\([^"]\+\)".*/\1/p' | head -n1)"
+  [ -z "${POOL}" ] && POOL="default"
+
   ${USE_SUDO} lxc launch ubuntu:24.04 "${VM_NAME}" --vm \
     -c limits.cpu=4 \
     -c limits.memory=8GiB \
     -c security.secureboot=false \
-    --device root,size=100GiB
+    --storage "${POOL}" \
+    --device root,type=disk,path=/,pool="${POOL}",size=100GiB
 
   echo "[lxd] Waiting for VM to start..."
   timeout=600
