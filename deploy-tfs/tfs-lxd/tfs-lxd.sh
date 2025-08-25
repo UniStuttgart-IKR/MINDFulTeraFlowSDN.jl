@@ -82,6 +82,12 @@ if ${USE_SUDO} lxc info "${VM_NAME}" >/dev/null 2>&1; then
   fi
 fi
 
+# Ensure default profile has a 'root' disk device
+if ! ${USE_SUDO} lxc profile show default | grep -qE '^\s+root:'; then
+  POOL="$(${USE_SUDO} lxc storage list --format csv -c n | head -n1)"
+  ${USE_SUDO} lxc profile device add default root disk path=/ pool="${POOL}"
+fi
+
 # Create VM if needed
 if [[ "$VM_EXISTS" == "false" ]]; then
   echo "[lxd] Creating new VM..."
