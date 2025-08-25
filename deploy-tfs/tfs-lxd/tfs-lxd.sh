@@ -82,23 +82,29 @@ if ${USE_SUDO} lxc info "${VM_NAME}" >/dev/null 2>&1; then
   fi
 fi
 
-# Ensure there's at least one storage pool; create a simple 'default' dir pool if missing
-if ! ${USE_SUDO} lxc query /1.0/storage-pools | grep -q '/1.0/storage-pools/'; then
-  echo "[lxd] Creating default storage pool..."
-  ${USE_SUDO} lxc storage create default dir
-fi
-
 # Create VM if needed
 if [[ "$VM_EXISTS" == "false" ]]; then
   echo "[lxd] Creating new VM..."
-  POOL="default"  # guaranteed to exist from the check above
 
-  ${USE_SUDO} lxc launch ubuntu:24.04 "${VM_NAME}" --vm \
+  # Ensure there's at least one storage pool; create a simple 'default' dir pool if missing
+  if ! ${USE_SUDO} lxc query /1.0/storage-pools | grep -q '/1.0/storage-pools/'; then
+    echo "[lxd] Creating default storage pool..."
+    ${USE_SUDO} lxc storage create default dir
+  fi
+  POOL="default"
+
+  # 1) Create the VM without starting it
+  ${USE_SUDO} lxc init ubuntu:24.04 "${VM_NAME}" --vm \
     -c limits.cpu=4 \
     -c limits.memory=8GiB \
     -c security.secureboot=false \
-    --storage "${POOL}" \
-    --device root,type=disk,path=/,pool="${POOL}",size=100GiB
+    --storage "${POOL}"
+
+  # 2) Add a proper root disk device (no profile required)
+  ${USE_SUDO} lxc config device add "${VM_NAME}" root disk path=/ pool="${POOL}" size=100GiB
+
+  # 3) Start the VM
+  ${USE_SUDO} lxc start "${VM_NAME}"
 
   echo "[lxd] Waiting for VM to start..."
   timeout=600
