@@ -84,7 +84,12 @@ fi
 
 # Ensure default profile has a 'root' disk device
 if ! ${USE_SUDO} lxc profile show default | grep -qE '^\s+root:'; then
-  POOL="$(${USE_SUDO} lxc storage list --format csv -c n | head -n1)"
+  # Grab the first storage pool name from `lxc storage list`
+  POOL="$(${USE_SUDO} lxc storage list --format csv --columns n | head -n1)"
+  # If --format csv not supported, fallback to parsing table
+  if [ -z "$POOL" ]; then
+    POOL="$(${USE_SUDO} lxc storage list | awk 'NR==4 {print $1}')"
+  fi
   ${USE_SUDO} lxc profile device add default root disk path=/ pool="${POOL}"
 fi
 
