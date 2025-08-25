@@ -90,6 +90,12 @@ if [[ "$VM_EXISTS" == "false" ]]; then
     -c limits.memory=8GiB \
     -c security.secureboot=false
 
+  # Resize root disk after creation
+  echo "[lxd] Resizing root disk to 100GiB..."
+  ${USE_SUDO} lxc config device override "${VM_NAME}" root size=100GiB || \
+  ${USE_SUDO} lxc config device add "${VM_NAME}" root disk pool=default path=/ size=100GiB || \
+  echo "[lxd] Warning: Could not resize disk, using default size"
+
   echo "[lxd] Waiting for VM to start..."
   timeout=600
   elapsed=0
