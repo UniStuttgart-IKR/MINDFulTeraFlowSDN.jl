@@ -19,22 +19,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # LXD VMs need KVM; make the device accessible on hosted runners
-      - name: Enable /dev/kvm
+      - name: Show workspace + verify script path
         run: |
+          set -euxo pipefail
+          echo "Workspace: $GITHUB_WORKSPACE"
+          ls -la
+          test -f deploy-tfs/tfs-lxd/tfs-lxd.sh || { echo "tfs-lxd.sh not found at deploy-tfs/tfs-lxd/"; exit 1; }
+
+      - name: Enable /dev/kvm (needed for LXD VM mode)
+        run: |
+          set -euxo pipefail
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
           ls -l /dev/kvm || (echo "ERROR: /dev/kvm not available"; exit 1)
 
-      - name: Run TFS bootstrap (script handles installs & VM)
-        working-directory: MINDFulTeraFlowSDN.jl/deploy-tfs/tfs-lxd
+      - name: Run TFS bootstrap (script does installs & VM)
+        working-directory: deploy-tfs/tfs-lxd
         env:
           DEVSPACE_MODE: ${{ github.event.inputs.devspace_mode || 'no' }}
         run: |
           set -euxo pipefail
           chmod +x ./tfs-lxd.sh ./bootstrap-part1.sh ./bootstrap-part2.sh ./bootstrap-julia.sh || true
-          # Your script installs LXD via snap and runs lxd init/VM/etc.
           sudo --preserve-env=DEVSPACE_MODE bash ./tfs-lxd.sh
 
       - name: Upload artifacts (best-effort)
@@ -46,4 +52,3 @@ jobs:
             artifacts
             /var/snap/lxd/common/lxd/logs
           if-no-files-found: ignore
-
