@@ -4,7 +4,7 @@ Setup and initialization functions for TeraFlow SDN
 
 const MINDF = MINDFul
 
-function setup_context_topology()
+function setup_context_topology(sdncontroller::TeraflowSDN)
     """
     Create admin context and topology in TeraFlow.
     Based on context_topo_creation.jl
@@ -13,7 +13,6 @@ function setup_context_topology()
     println("=== TeraFlow Context and Topology Creation Test ===")
 
     # Initialize SDN controller
-    sdncontroller = TeraflowSDN()
 
     # First, clean up all existing contexts
     println("--- Cleaning up existing contexts ---")
@@ -369,16 +368,8 @@ function create_graph_with_devices(ibnag::MINDF.IBNAttributeGraph, devicemapfile
         push_node_devices_to_tfs(nodeview, sdncontroller)
     end
 
-    println("\n=== Saving Device Map ===")
-    save_device_map(devicemapfile, sdncontroller)
-    println("✓ Device map saved with $(length(sdncontroller.device_map)) entries")
-
     # Create all network links after devices are created
     intra_links, inter_links = create_all_network_links(sdncontroller, nodeviews)
-
-    println("\n=== Final Save ===")
-    save_device_map(devicemapfile, sdncontroller)
-    println("✓ Final device map saved with all devices and links")
 
     println("\n=== Process Complete ===")
     println("Total devices and endpoints: $(length(sdncontroller.device_map))")

@@ -56,11 +56,20 @@ function loadmultidomaintestibnfs()
                     Dict{String,Bool}()
                 )
 
-                if !isfile(devicemapfile)
+                context = get_contexts(controllerurl)["contexts"]
+                if isempty(context)
+                    setup_context_topology(sdncontroller)
+                end
+
+                if isempty(get_devices(controllerurl)["devices"])
                     create_graph_with_devices(ibnag, devicemapfile, sdncontroller)
                 end
 
-                load_device_map!(devicemapfile, sdncontroller) 
+                if !isfile(devicemapfile)
+                    save_device_map(devicemapfile, sdncontroller)
+                end
+
+                load_device_map!(devicemapfile, sdncontroller)
             else
                 sdncontroller = MINDF.SDNdummy()
             end
@@ -153,11 +162,20 @@ function loadmultidomaintestidistributedbnfs()
                         Dict{String,Bool}()
                     )
 
-                    if !isfile(devicemapfile)
+                    context = get_contexts(controllerurl)["contexts"]
+                    if isempty(context)
+                        setup_context_topology(sdncontroller)
+                    end
+
+                    if isempty(get_devices(controllerurl)["devices"])
                         create_graph_with_devices(ibnag, devicemapfile, sdncontroller)
                     end
 
-                    load_device_map!(devicemapfile, sdncontroller) 
+                    if !isfile(devicemapfile)
+                        save_device_map(devicemapfile, sdncontroller)
+                    end
+
+                    load_device_map!(devicemapfile, sdncontroller)
                 else
                     sdncontroller = MINDF.SDNdummy()  # Use dummy for other domains
                 end
@@ -231,11 +249,20 @@ function loadpermissionedbnfs()
                     Dict{String,Bool}()
                 )
 
-                if !isfile(devicemapfile)
+                context = get_contexts(controllerurl)["contexts"]
+                if isempty(context)
+                    setup_context_topology(sdncontroller)
+                end
+
+                if isempty(get_devices(controllerurl)["devices"])
                     create_graph_with_devices(ibnag, devicemapfile, sdncontroller)
                 end
 
-                load_device_map!(devicemapfile, sdncontroller) 
+                if !isfile(devicemapfile)
+                    save_device_map(devicemapfile, sdncontroller)
+                end
+
+                load_device_map!(devicemapfile, sdncontroller)
             else
                 sdncontroller = MINDF.SDNdummy()  # Use dummy for other domains
             end

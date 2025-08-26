@@ -75,12 +75,20 @@ function main()
         ag = name_graph[2]
         ibnag = MINDF.default_IBNAttributeGraph(ag)
         if MINDF.getibnfid(ibnag) == UUID(localid)
+            context = get_contexts(localcontrollerurl)["contexts"]
+            if isempty(context)
+                setup_context_topology(sdncontroller)
+            end
 
-            if !isfile(localdevicemapfile)
+            if isempty(get_devices(localcontrollerurl)["devices"])
                 create_graph_with_devices(ibnag, localdevicemapfile, sdncontroller)
             end
 
-            load_device_map!(localdevicemapfile, sdncontroller) 
+            if !isfile(localdevicemapfile)
+                save_device_map(localdevicemapfile, sdncontroller)
+            end
+
+            load_device_map!(localdevicemapfile, sdncontroller)
 
             ibnf = MINDF.IBNFramework(ibnag, hdlr, encryption, neighbourips, sdncontroller, ibnfsdict; verbose)
             break
