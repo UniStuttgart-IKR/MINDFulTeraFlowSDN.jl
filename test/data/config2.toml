@@ -14,7 +14,7 @@ devicemapfile = "device_map_2.jld2"
 ip = "127.0.0.1"
 port = 8091
 ibnfid = 0x1
-permission = "limited"
+permission = "full"
 rsapublickey = "rsa_pub1.pem"
 
 [[remote.neighbours]]

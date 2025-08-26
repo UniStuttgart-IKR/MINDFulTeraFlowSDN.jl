@@ -14,12 +14,12 @@ devicemapfile = "device_map_1.jld2"
 ip = "127.0.0.1"
 port = 8082
 ibnfid = 0x2
-permission = "limited"
+permission = "full"
 rsapublickey = "rsa_pub2.pem"
 
 [[remote.neighbours]]
 ip = "127.0.0.1"
 port = 8083
 ibnfid = 0x3
-permission = "limited"
+permission = "full"
 rsapublickey = "rsa_pub3.pem"

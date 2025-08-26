@@ -87,26 +87,6 @@ function main()
         end
     end
 
-
-    if localport == 8091
-        #@show ibnfs[1].ibnfhandlers
-        conintent_bordernode = MINDFul.ConnectivityIntent(MINDFul.GlobalNode(UUID(1), 10), MINDFul.GlobalNode(UUID(2), 23), u"100.0Gbps")
-        intentuuid_bordernode = MINDFul.addintent!(ibnf, conintent_bordernode, MINDFul.NetworkOperator())
-
-        @show MINDFul.compileintent!(ibnf, intentuuid_bordernode, MINDFul.KShorestPathFirstFitCompilation(10))
-        
-        # install
-        @show MINDFul.installintent!(ibnf, intentuuid_bordernode; verbose)
-
-        # uninstall
-        @show MINDFul.uninstallintent!(ibnf, intentuuid_bordernode; verbose)
-    
-        # uncompile
-        @show MINDFul.uncompileintent!(ibnf, intentuuid_bordernode; verbose)
-
-        # closeibnfserver(ibnf)
-    end
-
     if ibnf === nothing
         error("No matching ibnf found for ibnfid $localid")
     else
