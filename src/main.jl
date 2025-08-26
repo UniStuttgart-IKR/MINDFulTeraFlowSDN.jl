@@ -10,8 +10,8 @@ The paths of the files referenced in the configuration file can be absolute or r
 function main()
     verbose = false
     MAINDIR = pwd()
-    if length(ARGS) < 1
-        error("Usage: julia MINDFulTeraFlowSDN.main() <configX.toml>")
+    if length(ARGS) < 2
+        error("Usage: julia MINDFulTeraFlowSDN.main() <configX.toml> <controllerIP>")
     end
 
     configpath = ARGS[1]
@@ -37,6 +37,10 @@ function main()
     localprivatekeyfile = config["local"]["rsaprivatekey"]
     finallocalprivatekeyfile = MINDF.checkfilepath(CONFIGDIR, localprivatekeyfile)
     localprivatekey = MINDF.readb64keys(finallocalprivatekeyfile)
+    localdevicemapfile = MINDF.checkfilepath(CONFIGDIR, config["local"]["devicemapfile"])
+    @show localdevicemapfile
+    localcontrollerip = ARGS[2]
+    localcontrollerurl = string(HTTP.URI(; scheme = "http", host = localcontrollerip, port = string(80), path="/tfs-api"))
 
     neighboursconfig = config["remote"]["neighbours"]
     neighbourips = [n["ip"] for n in neighboursconfig]
@@ -58,8 +62,17 @@ function main()
     end
 
 
-    sdncontroller = TeraflowSDN()
-    load_device_map!(MAINDIR*"/test/data/device_map.jld2", sdncontroller)
+    # sdncontroller = TeraflowSDN()
+    # load_device_map!(MAINDIR*"/test/data/device_map.jld2", sdncontroller)
+
+    
+    sdncontroller = TeraflowSDN(
+    localcontrollerurl, 
+    Dict{Any,String}(),
+    Dict{Tuple{Int,Symbol},String}(),
+    Dict{NTuple{6,Any},String}(),
+    Dict{String,Bool}()
+)
 
     ibnfsdict = Dict{Int, MINDF.IBNFramework}()
     ibnf = nothing
@@ -67,12 +80,41 @@ function main()
         ag = name_graph[2]
         ibnag = MINDF.default_IBNAttributeGraph(ag)
         if MINDF.getibnfid(ibnag) == UUID(localid)
+
+            if !isfile(localdevicemapfile)
+                create_graph_with_devices(ibnag, localdevicemapfile, sdncontroller)
+            end
+
+            load_device_map!(localdevicemapfile, sdncontroller) 
+
             ibnf = MINDF.IBNFramework(ibnag, hdlr, encryption, neighbourips, sdncontroller, ibnfsdict; verbose)
             break
         end
     end
 
-    return if ibnf === nothing
+
+    if localport == 8081
+        #@show ibnfs[1].ibnfhandlers
+        conintent_bordernode = MINDFul.ConnectivityIntent(MINDFul.GlobalNode(UUID(1), 4), MINDFul.GlobalNode(UUID(3), 25), u"100.0Gbps")
+        intentuuid_bordernode = MINDFul.addintent!(ibnf, conintent_bordernode, MINDFul.NetworkOperator())
+
+        @show MINDFul.compileintent!(ibnf, intentuuid_bordernode, MINDFul.KShorestPathFirstFitCompilation(10))
+        
+        # install
+        @show MINDFul.installintent!(ibnf, intentuuid_bordernode; verbose)
+
+        # uninstall
+        @show MINDFul.uninstallintent!(ibnf, intentuuid_bordernode; verbose)
+    
+        # uncompile
+        @show MINDFul.uncompileintent!(ibnf, intentuuid_bordernode; verbose)
+
+        # closeibnfserver(ibnf)
+    end
+
+    if ibnf === nothing
         error("No matching ibnf found for ibnfid $localid")
+    else
+        return ibnf
     end
 end

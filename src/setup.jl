@@ -354,34 +354,34 @@ function setup_context_topology()
 
 end
 
-function create_graph_with_devices()
+function create_graph_with_devices(ibnag::MINDF.IBNAttributeGraph, devicemapfile::String, sdncontroller::TeraflowSDN)
     """
     Create IBN graph and push all devices to TeraFlow SDN.
     Based on graph_creation.jl  
     """
 
-    # load data
-    domains_name_graph = first(JLD2.load("test/data/itz_IowaStatewideFiberMap-itz_Missouri__(1,9)-(2,3),(1,6)-(2,54),(1,1)-(2,21).jld2"))[2]
-    println("Imported graph")
-    ag1 = first(domains_name_graph)[2]
+    # # load data
+    # domains_name_graph = first(JLD2.load("test/data/itz_IowaStatewideFiberMap-itz_Missouri__(1,9)-(2,3),(1,6)-(2,54),(1,1)-(2,21).jld2"))[2]
+    # println("Imported graph")
+    # ag1 = first(domains_name_graph)[2]
 
-    ibnag1 = MINDF.default_IBNAttributeGraph(ag1)
+    # ibnag1 = MINDF.default_IBNAttributeGraph(ag1)
 
-    # Prepare all required arguments
-    operationmode = MINDF.DefaultOperationMode()
-    ibnfid = AG.graph_attr(ibnag1) 
-    intentdag = MINDF.IntentDAG()
-    ibnfhandlers = MINDF.AbstractIBNFHandler[]
-    sdncontroller = TeraflowSDN()
-    load_device_map!("test/data/device_map.jld2", sdncontroller)
+    # # Prepare all required arguments
+    # operationmode = MINDF.DefaultOperationMode()
+    # ibnfid = AG.graph_attr(ibnag1) 
+    # intentdag = MINDF.IntentDAG()
+    # ibnfhandlers = MINDF.AbstractIBNFHandler[]
+    # sdncontroller = TeraflowSDN()
+    # load_device_map!("test/data/device_map.jld2", sdncontroller)
 
-    # Create IBNFCommunication from handlers (missing parameter)
-    ibnfcomm = MINDF.IBNFCommunication(nothing, ibnfhandlers)
+    # # Create IBNFCommunication from handlers (missing parameter)
+    # ibnfcomm = MINDF.IBNFCommunication(nothing, ibnfhandlers)
 
-    # Now call the full constructor with correct parameters
-    ibnf1 = MINDF.IBNFramework(operationmode, ibnfid, intentdag, ibnag1, ibnfcomm, sdncontroller)
+    # # Now call the full constructor with correct parameters
+    # ibnf1 = MINDF.IBNFramework(operationmode, ibnfid, intentdag, ibnag1, ibnfcomm, sdncontroller)
 
-    ibnag = MINDF.getibnag(ibnf1)                       
+    # ibnag = MINDF.getibnag(ibnf1)                       
     nodeviews = MINDF.getnodeviews(ibnag)
     println("Loaded IBN graph with $(length(nodeviews)) nodeviews")
 
@@ -393,14 +393,14 @@ function create_graph_with_devices()
     end
 
     println("\n=== Saving Device Map ===")
-    save_device_map("test/data/device_map.jld2", sdncontroller)
+    save_device_map(devicemapfile, sdncontroller)
     println("✓ Device map saved with $(length(sdncontroller.device_map)) entries")
 
     # Create all network links after devices are created
     intra_links, inter_links = create_all_network_links(sdncontroller, nodeviews)
 
     println("\n=== Final Save ===")
-    save_device_map("test/data/device_map.jld2", sdncontroller)
+    save_device_map(devicemapfile, sdncontroller)
     println("✓ Final device map saved with all devices and links")
 
     println("\n=== Process Complete ===")

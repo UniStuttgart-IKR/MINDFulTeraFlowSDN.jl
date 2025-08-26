@@ -11,28 +11,28 @@ function stable_uuid(node_id::Int, kind::Symbol)
     return string(UUIDs.uuid5(TFS_UUID_NAMESPACE, "$(node_id)-$(kind)"))
 end
 
-struct TeraflowSDN <: MINDFul.AbstractSDNController
-    api_url::String
+mutable struct TeraflowSDN <: MINDFul.AbstractSDNController
+    const api_url::String
     device_map::Dict{Any,String}   # Changed from Dict{Tuple{Int,Symbol},String} to Dict{Any,String}
     intra_link_map::Dict{Tuple{Int,Symbol},String}  # (node_id, :link_type) → uuid
     inter_link_map::Dict{NTuple{6,Any},String}    # (node1, ep1_id, node2, ep2_id, :link, direction) → uuid
     endpoint_usage::Dict{String,Bool}             # endpoint_uuid → is_used
 end
 
-TeraflowSDN() = TeraflowSDN(
-    "http://127.0.0.1:80/tfs-api", 
-    Dict{Any,String}(),  # Changed from Dict{Tuple{Int,Symbol},String}()
-    Dict{Tuple{Int,Symbol},String}(),
-    Dict{NTuple{6,Any},String}(),
-    Dict{String,Bool}()
-)
+# TeraflowSDN() = TeraflowSDN(
+#     "http://127.0.0.1:80/tfs-api", 
+#     Dict{Any,String}(),  # Changed from Dict{Tuple{Int,Symbol},String}()
+#     Dict{Tuple{Int,Symbol},String}(),
+#     Dict{NTuple{6,Any},String}(),
+#     Dict{String,Bool}()
+# )
 
 function save_device_map(path::AbstractString, sdn::TeraflowSDN)
     @save path device_map = sdn.device_map intra_link_map = sdn.intra_link_map inter_link_map = sdn.inter_link_map endpoint_usage = sdn.endpoint_usage
 end
 
 function load_device_map!(path::AbstractString, sdn::TeraflowSDN)
-    isfile(path) || return
+    # isfile(path) || return
     
     try
         @load path device_map intra_link_map inter_link_map endpoint_usage
