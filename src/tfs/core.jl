@@ -19,21 +19,11 @@ mutable struct TeraflowSDN <: MINDFul.AbstractSDNController
     endpoint_usage::Dict{String,Bool}             # endpoint_uuid → is_used
 end
 
-# TeraflowSDN() = TeraflowSDN(
-#     "http://127.0.0.1:80/tfs-api", 
-#     Dict{Any,String}(),  # Changed from Dict{Tuple{Int,Symbol},String}()
-#     Dict{Tuple{Int,Symbol},String}(),
-#     Dict{NTuple{6,Any},String}(),
-#     Dict{String,Bool}()
-# )
-
 function save_device_map(path::AbstractString, sdn::TeraflowSDN)
     @save path device_map = sdn.device_map intra_link_map = sdn.intra_link_map inter_link_map = sdn.inter_link_map endpoint_usage = sdn.endpoint_usage
 end
 
-function load_device_map!(path::AbstractString, sdn::TeraflowSDN)
-    # isfile(path) || return
-    
+function load_device_map!(path::AbstractString, sdn::TeraflowSDN)    
     try
         @load path device_map intra_link_map inter_link_map endpoint_usage
         

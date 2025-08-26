@@ -354,34 +354,11 @@ function setup_context_topology()
 
 end
 
-function create_graph_with_devices(ibnag::MINDF.IBNAttributeGraph, devicemapfile::String, sdncontroller::TeraflowSDN)
-    """
-    Create IBN graph and push all devices to TeraFlow SDN.
-    Based on graph_creation.jl  
-    """
-
-    # # load data
-    # domains_name_graph = first(JLD2.load("test/data/itz_IowaStatewideFiberMap-itz_Missouri__(1,9)-(2,3),(1,6)-(2,54),(1,1)-(2,21).jld2"))[2]
-    # println("Imported graph")
-    # ag1 = first(domains_name_graph)[2]
-
-    # ibnag1 = MINDF.default_IBNAttributeGraph(ag1)
-
-    # # Prepare all required arguments
-    # operationmode = MINDF.DefaultOperationMode()
-    # ibnfid = AG.graph_attr(ibnag1) 
-    # intentdag = MINDF.IntentDAG()
-    # ibnfhandlers = MINDF.AbstractIBNFHandler[]
-    # sdncontroller = TeraflowSDN()
-    # load_device_map!("test/data/device_map.jld2", sdncontroller)
-
-    # # Create IBNFCommunication from handlers (missing parameter)
-    # ibnfcomm = MINDF.IBNFCommunication(nothing, ibnfhandlers)
-
-    # # Now call the full constructor with correct parameters
-    # ibnf1 = MINDF.IBNFramework(operationmode, ibnfid, intentdag, ibnag1, ibnfcomm, sdncontroller)
-
-    # ibnag = MINDF.getibnag(ibnf1)                       
+ """
+Create IBN graph and push all devices to TeraFlow SDN.
+Based on graph_creation.jl  
+"""
+function create_graph_with_devices(ibnag::MINDF.IBNAttributeGraph, devicemapfile::String, sdncontroller::TeraflowSDN)             
     nodeviews = MINDF.getnodeviews(ibnag)
     println("Loaded IBN graph with $(length(nodeviews)) nodeviews")
 
@@ -413,12 +390,11 @@ function create_graph_with_devices(ibnag::MINDF.IBNAttributeGraph, devicemapfile
 
 end
 
-function verify_tfs_deployment()
-    """
-    Verify that devices and links are properly created in TeraFlow.
-    Based on verify_tfs_state.jl
-    """
-    
+"""
+Verify that devices and links are properly created in TeraFlow.
+Based on verify_tfs_state.jl
+"""
+function verify_tfs_deployment()    
     """
     verify_tfs_devices_and_links(sdn::TeraflowSDN, nodeviews)
 
@@ -471,8 +447,9 @@ function verify_tfs_deployment()
         return Dict(:neighbors => neighbors, :nodes => nodes_with_devices)
     end
 
+    """Check if devices in device_map exist in TFS (including multi-TM verification)"""
     function verify_devices_against_map(sdn::TeraflowSDN, tfs_devices, nodeviews)
-        """Check if devices in device_map exist in TFS (including multi-TM verification)"""
+        
         println("\n📱 DEVICE VERIFICATION (Multi-TM + Shared OLS)")
         println("-"^50)
         
@@ -630,8 +607,9 @@ function verify_tfs_deployment()
         )
     end
 
+    """Check if intra-node links exist in TFS for ALL TMs"""
     function verify_intra_links_multi_tm(sdn::TeraflowSDN, tfs_links, nodeviews)
-        """Check if intra-node links exist in TFS for ALL TMs"""
+        
         println("\n🔗 INTRA-NODE LINK VERIFICATION (Multi-TM Architecture)")
         println("-"^55)
         
@@ -753,8 +731,9 @@ function verify_tfs_deployment()
         )
     end
 
+    """Check if inter-node links with shared OLS match MINDFul topology, accounting for empty nodes and multi-TM offset"""
     function verify_inter_links(sdn::TeraflowSDN, tfs_links, mindful_topology)
-        """Check if inter-node links with shared OLS match MINDFul topology, accounting for empty nodes and multi-TM offset"""
+        
         println("\n🌐 INTER-NODE LINK VERIFICATION (Shared OLS + Multi-TM Offset)")
         println("-"^60)
         
@@ -940,8 +919,9 @@ function verify_tfs_deployment()
         )
     end
 
+    """Generate focused verification report for multi-TM architecture"""
     function generate_focused_report(device_results, intra_results, inter_results)
-        """Generate focused verification report for multi-TM architecture"""
+        
         println("\n" * "="^65)
         println("🏁 FOCUSED VERIFICATION SUMMARY (Multi-TM Architecture)")
         println("="^65)

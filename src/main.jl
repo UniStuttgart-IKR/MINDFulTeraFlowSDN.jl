@@ -11,7 +11,7 @@ function main()
     verbose = false
     MAINDIR = pwd()
     if length(ARGS) < 2
-        error("Usage: julia MINDFulTeraFlowSDN.main() <configX.toml> <controllerIP>")
+        error("Usage: julia MINDFulTeraFlowSDN.main() <path/to/configX.toml> <controller_IP_address>")
     end
 
     configpath = ARGS[1]
@@ -38,7 +38,6 @@ function main()
     finallocalprivatekeyfile = MINDF.checkfilepath(CONFIGDIR, localprivatekeyfile)
     localprivatekey = MINDF.readb64keys(finallocalprivatekeyfile)
     localdevicemapfile = MINDF.checkfilepath(CONFIGDIR, config["local"]["devicemapfile"])
-    @show localdevicemapfile
     localcontrollerip = ARGS[2]
     localcontrollerurl = string(HTTP.URI(; scheme = "http", host = localcontrollerip, port = string(80), path="/tfs-api"))
 
@@ -60,10 +59,6 @@ function main()
         URIstring = string(URI)
         push!(hdlr, MINDF.RemoteHTTPHandler(UUID(neighbourids[i]), URIstring, neigbhbourpermissions[i], neighbourpublickeys[i], "", "", ""))
     end
-
-
-    # sdncontroller = TeraflowSDN()
-    # load_device_map!(MAINDIR*"/test/data/device_map.jld2", sdncontroller)
 
     
     sdncontroller = TeraflowSDN(
@@ -93,9 +88,9 @@ function main()
     end
 
 
-    if localport == 8081
+    if localport == 8091
         #@show ibnfs[1].ibnfhandlers
-        conintent_bordernode = MINDFul.ConnectivityIntent(MINDFul.GlobalNode(UUID(1), 4), MINDFul.GlobalNode(UUID(3), 25), u"100.0Gbps")
+        conintent_bordernode = MINDFul.ConnectivityIntent(MINDFul.GlobalNode(UUID(1), 10), MINDFul.GlobalNode(UUID(2), 23), u"100.0Gbps")
         intentuuid_bordernode = MINDFul.addintent!(ibnf, conintent_bordernode, MINDFul.NetworkOperator())
 
         @show MINDFul.compileintent!(ibnf, intentuuid_bordernode, MINDFul.KShorestPathFirstFitCompilation(10))
