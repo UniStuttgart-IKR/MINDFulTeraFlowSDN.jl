@@ -80,9 +80,6 @@ function main()
             context = get_contexts(localcontrollerurl)["contexts"]
             if isempty(context)
                 setup_context_topology(sdncontroller)
-            end
-
-            if isempty(get_devices(localcontrollerurl)["devices"])
                 create_graph_with_devices(ibnag, localdevicemapfile, sdncontroller)
             end
 
