@@ -4,7 +4,6 @@ Manifest.toml
 *.json
 *.cert
 *.key
-*.pem
 *.b64
 .vscode/
 docs/build/

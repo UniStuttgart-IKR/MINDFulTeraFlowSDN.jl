@@ -15,6 +15,7 @@ function main()
     end
 
     configpath = ARGS[1]
+    @show configpath
     finalconfigpath = MINDF.checkfilepath(MAINDIR, configpath)
     CONFIGDIR = dirname(finalconfigpath)
     config = TOML.parsefile(finalconfigpath)
@@ -39,6 +40,7 @@ function main()
     localprivatekey = MINDF.readb64keys(finallocalprivatekeyfile)
     localdevicemapfile = MINDF.checkfilepath(CONFIGDIR, config["local"]["devicemapfile"])
     localcontrollerip = ARGS[2]
+    @show localcontrollerip
     localcontrollerurl = string(HTTP.URI(; scheme = "http", host = localcontrollerip, port = string(80), path="/tfs-api"))
 
     neighboursconfig = config["remote"]["neighbours"]
