@@ -59,9 +59,6 @@ function loadmultidomaintestibnfs()
                 context = get_contexts(controllerurl)["contexts"]
                 if isempty(context)
                     setup_context_topology(sdncontroller)
-                end
-
-                if isempty(get_devices(controllerurl)["devices"])
                     create_graph_with_devices(ibnag, devicemapfile, sdncontroller)
                 end
 
@@ -165,9 +162,6 @@ function loadmultidomaintestidistributedbnfs()
                     context = get_contexts(controllerurl)["contexts"]
                     if isempty(context)
                         setup_context_topology(sdncontroller)
-                    end
-
-                    if isempty(get_devices(controllerurl)["devices"])
                         create_graph_with_devices(ibnag, devicemapfile, sdncontroller)
                     end
 
@@ -252,9 +246,6 @@ function loadpermissionedbnfs()
                 context = get_contexts(controllerurl)["contexts"]
                 if isempty(context)
                     setup_context_topology(sdncontroller)
-                end
-
-                if isempty(get_devices(controllerurl)["devices"])
                     create_graph_with_devices(ibnag, devicemapfile, sdncontroller)
                 end
 
