@@ -357,7 +357,7 @@ end
 Create IBN graph and push all devices to TeraFlow SDN.
 Based on graph_creation.jl  
 """
-function create_graph_with_devices(ibnag::MINDF.IBNAttributeGraph, devicemapfile::String, sdncontroller::TeraflowSDN)             
+function create_graph_with_devices(ibnag::MINDF.IBNAttributeGraph, sdncontroller::TeraflowSDN)             
     nodeviews = MINDF.getnodeviews(ibnag)
     println("Loaded IBN graph with $(length(nodeviews)) nodeviews")
 
@@ -371,21 +371,14 @@ function create_graph_with_devices(ibnag::MINDF.IBNAttributeGraph, devicemapfile
     # Create all network links after devices are created
     intra_links, inter_links = create_all_network_links(sdncontroller, nodeviews)
 
-    println("\n=== Process Complete ===")
-    println("Total devices and endpoints: $(length(sdncontroller.device_map))")
-    println("Total intra-node links: $(length(sdncontroller.intra_link_map))")
-    println("Total inter-node links: $(length(sdncontroller.inter_link_map))")
-    println("Intra-node links created: $intra_links") 
-    println("Inter-node links created: $inter_links")
-    println("Link states applied to shared OLS devices")
-
+    println("\n=== Graph Creation Complete ===")
 end
 
 """
 Verify that devices and links are properly created in TeraFlow.
 Based on verify_tfs_state.jl
 """
-function verify_tfs_deployment()    
+function verify_tfs_deployment(sdncontroller::TeraflowSDN, ibnag::MINDF.IBNAttributeGraph, devicemapfile::String)    
     """
     verify_tfs_devices_and_links(sdn::TeraflowSDN, nodeviews)
 
@@ -1061,36 +1054,9 @@ function verify_tfs_deployment()
     end
 
     # Main execution function (unchanged)
-    function run_focused_verification()
-        # Load data
-        domains_name_graph = first(JLD2.load("test/data/itz_IowaStatewideFiberMap-itz_Missouri__(1,9)-(2,3),(1,6)-(2,54),(1,1)-(2,21).jld2"))[2]
-        println("Loaded graph")
-        ag1 = first(domains_name_graph)[2]
+    function run_focused_verification(sdncontroller::TeraflowSDN, ibnag::MINDF.IBNAttributeGraph, devicemapfile::String)
+        load_device_map!(devicemapfile, sdncontroller)
         
-        ibnag1 = MINDF.default_IBNAttributeGraph(ag1)
-        
-        # Prepare framework
-        operationmode = MINDF.DefaultOperationMode()
-        ibnfid = AG.graph_attr(ibnag1) 
-        intentdag = MINDF.IntentDAG()
-        ibnfhandlers = MINDF.AbstractIBNFHandler[]
-        sdncontroller = TeraflowSDN()
-        
-        # Load device/link maps
-        if isfile("test/data/device_map.jld2")
-            load_device_map!("test/data/device_map.jld2", sdncontroller)
-            println("✓ Loaded device and link maps")
-        else
-            println("❌ No device map found - cannot verify")
-            return nothing
-        end
-        
-        # Create IBNFCommunication from handlers (missing parameter)
-        ibnfcomm = MINDF.IBNFCommunication(nothing, ibnfhandlers)
-
-        # Now call the full constructor with correct parameters
-        ibnf1 = MINDF.IBNFramework(operationmode, ibnfid, intentdag, ibnag1, ibnfcomm, sdncontroller)
-        ibnag = MINDF.getibnag(ibnf1)
         nodeviews = MINDF.getnodeviews(ibnag)
         
         println("📋 Verification scope: $(length(nodeviews)) nodes")
@@ -1104,5 +1070,5 @@ function verify_tfs_deployment()
     end
 
     # Execute the verification
-    run_focused_verification()
+    run_focused_verification(sdncontroller, ibnag, devicemapfile)
 end
