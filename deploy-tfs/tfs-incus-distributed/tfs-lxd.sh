@@ -7,9 +7,9 @@ RUN_JULIA="${RUN_JULIA:-false}"
 CONFIG_PATH="${CONFIG_PATH:-test/data/config3.toml}"
 
 # 0) Setup incus
-if ! snap list 2>/dev/null | grep -q '^incus '; then
-  echo "[incus] Installing incus snap..."
-  sudo snap install incus
+if ! command -v incus >/dev/null 2>&1; then
+  echo "[incus] ERROR: Incus not found in PATH. Install it before running this script."
+  exit 1
 fi
 
 if ! groups | grep -q incus; then
@@ -93,6 +93,9 @@ if [[ "$VM_EXISTS" == "false" ]]; then
     -c security.secureboot=false \
     --device root,size=100GiB
 
+  # echo "[incus] Attaching VM to incusbr0 network bridge..."
+  # ${USE_SUDO} incus config device add "${VM_NAME}" eth0 nic network=incusbr0 || true
+
   echo "[incus] Waiting for VM to start..."
   timeout=600
   elapsed=0
@@ -104,6 +107,18 @@ if [[ "$VM_EXISTS" == "false" ]]; then
     elapsed=$((elapsed + 15))
   done
 
+  # ${USE_SUDO} incus restart "${VM_NAME}"
+  # timeout=600
+  # elapsed=0
+  # while [ $elapsed -lt $timeout ]; do
+  #   if ${USE_SUDO} incus exec "${VM_NAME}" -- echo "VM ready" >/dev/null 2>&1; then
+  #     break
+  #   fi
+  #   sleep 15
+  #   elapsed=$((elapsed + 15))
+  # done
+
+  echo "cloud init"
   ${USE_SUDO} incus exec "${VM_NAME}" -- cloud-init status --wait || true
 
   echo "[incus] Setting up VM..."
