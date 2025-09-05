@@ -29,6 +29,11 @@ TM = Base.get_extension(MINDFul, :TestModule)
 
 function loadmultidomaintestibnfs()
     domains_name_graph = first(JLD2.load(TESTDIR*"/data/itz_IowaStatewideFiberMap-itz_Missouri-itz_UsSignal_addedge_24-23,23-15__(1,9)-(2,3),(1,6)-(2,54),(1,1)-(2,21),(1,16)-(3,18),(1,17)-(3,25),(2,27)-(3,11).jld2"))[2]
+    
+    devicemapfile = MINDF.checkfilepath(TESTDIR, "data/device_map_1.jld2")
+    controllerip = "127.0.0.1"
+    controllerurl = string(HTTP.URI(; scheme = "http", host = controllerip, port = string(80), path="/tfs-api"))
+
 
     # Create all domains with proper initialization
     ibnfs = [
@@ -43,11 +48,25 @@ function loadmultidomaintestibnfs()
             
             # Use TeraFlow for domain 1, dummy for others
             if i == 1
-                sdncontroller = TeraflowSDN()
-                # Load existing device mappings if available
-                if isfile(TESTDIR*"/data/device_map.jld2")
-                    load_device_map!(TESTDIR*"/data/device_map.jld2", sdncontroller)
+                sdncontroller = TeraflowSDN(
+                    controllerurl, 
+                    Dict{Any,String}(),
+                    Dict{Tuple{Int,Symbol},String}(),
+                    Dict{NTuple{6,Any},String}(),
+                    Dict{String,Bool}()
+                )
+
+                context = get_contexts(controllerurl)["contexts"]
+                if isempty(context)
+                    setup_context_topology(sdncontroller)
+                    create_graph_with_devices(ibnag, sdncontroller)
                 end
+
+                if !isfile(devicemapfile)
+                    save_device_map(devicemapfile, sdncontroller)
+                end
+
+                load_device_map!(devicemapfile, sdncontroller)
             else
                 sdncontroller = MINDF.SDNdummy()
             end
@@ -103,6 +122,10 @@ function loadmultidomaintestidistributedbnfs()
     publickeysfiles = [n["rsapublickey"] for n in domainsconfig]
     publickeys = [MINDF.readb64keys(MINDF.checkfilepath(CONFIGDIR, pkfile)) for pkfile in publickeysfiles]
 
+    devicemapfile = MINDF.checkfilepath(CONFIGDIR, "device_map_1.jld2")
+    controllerip = "127.0.0.1"
+    controllerurl = string(HTTP.URI(; scheme = "http", host = controllerip, port = string(80), path="/tfs-api"))
+
     encryption = config["encryption"]
     if encryption
         urischeme = "https"
@@ -128,11 +151,25 @@ function loadmultidomaintestidistributedbnfs()
                 end
                 
                 if i==1
-                    sdncontroller = TeraflowSDN()
-                    # Load existing device mappings if available
-                    if isfile(TESTDIR*"/data/device_map.jld2")
-                        load_device_map!(TESTDIR*"/data/device_map.jld2", sdncontroller)
+                    sdncontroller = TeraflowSDN(
+                        controllerurl, 
+                        Dict{Any,String}(),
+                        Dict{Tuple{Int,Symbol},String}(),
+                        Dict{NTuple{6,Any},String}(),
+                        Dict{String,Bool}()
+                    )
+
+                    context = get_contexts(controllerurl)["contexts"]
+                    if isempty(context)
+                        setup_context_topology(sdncontroller)
+                        create_graph_with_devices(ibnag, sdncontroller)
                     end
+
+                    if !isfile(devicemapfile)
+                        save_device_map(devicemapfile, sdncontroller)
+                    end
+
+                    load_device_map!(devicemapfile, sdncontroller)
                 else
                     sdncontroller = MINDF.SDNdummy()  # Use dummy for other domains
                 end
@@ -168,6 +205,10 @@ function loadpermissionedbnfs()
     privatekeys = [MINDF.readb64keys(MINDF.checkfilepath(CONFIGDIR, pkfile)) for pkfile in privatekeysfiles]
     publickeysfiles = [n["rsapublickey"] for n in domainsconfig]
     publickeys = [MINDF.readb64keys(MINDF.checkfilepath(CONFIGDIR, pkfile)) for pkfile in publickeysfiles]
+    
+    devicemapfile = MINDF.checkfilepath(CONFIGDIR, "device_map_1.jld2")
+    controllerip = "127.0.0.1"
+    controllerurl = string(HTTP.URI(; scheme = "http", host = controllerip, port = string(80), path="/tfs-api"))
 
     encryption = config["encryption"]
     if encryption
@@ -194,11 +235,25 @@ function loadpermissionedbnfs()
             end
 
             if i==1
-                sdncontroller = TeraflowSDN()
-                # Load existing device mappings if available
-                if isfile(TESTDIR*"/data/device_map.jld2")
-                    load_device_map!(TESTDIR*"/data/device_map.jld2", sdncontroller)
+                sdncontroller = TeraflowSDN(
+                    controllerurl, 
+                    Dict{Any,String}(),
+                    Dict{Tuple{Int,Symbol},String}(),
+                    Dict{NTuple{6,Any},String}(),
+                    Dict{String,Bool}()
+                )
+
+                context = get_contexts(controllerurl)["contexts"]
+                if isempty(context)
+                    setup_context_topology(sdncontroller)
+                    create_graph_with_devices(ibnag, sdncontroller)
                 end
+
+                if !isfile(devicemapfile)
+                    save_device_map(devicemapfile, sdncontroller)
+                end
+
+                load_device_map!(devicemapfile, sdncontroller)
             else
                 sdncontroller = MINDF.SDNdummy()  # Use dummy for other domains
             end

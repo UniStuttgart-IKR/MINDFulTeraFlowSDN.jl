@@ -6,6 +6,7 @@ ip = "127.0.0.1"
 port = 8082
 ibnfid = 0x2
 rsaprivatekey = "rsa_priv2.pem"
+devicemapfile = "device_map_2.jld2"
 
 [remote]
 
@@ -13,7 +14,7 @@ rsaprivatekey = "rsa_priv2.pem"
 ip = "127.0.0.1"
 port = 8091
 ibnfid = 0x1
-permission = "limited"
+permission = "full"
 rsapublickey = "rsa_pub1.pem"
 
 [[remote.neighbours]]

@@ -6,6 +6,7 @@ ip = "127.0.0.1"
 port = 8083
 ibnfid = 0x3
 rsaprivatekey = "rsa_priv3.pem"
+devicemapfile = "device_map_3.jld2"
 
 [remote]
 

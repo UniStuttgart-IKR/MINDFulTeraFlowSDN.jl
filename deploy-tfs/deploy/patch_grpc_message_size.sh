@@ -2,11 +2,11 @@
 # filepath: /home/kshpthk/MINDFulTeraFlowSDN.jl/deploy-tfs/patch_grpc_message_size.sh
 
 # Copyright 2022-2024 ETSI SDG TeraFlowSDN (TFS) (https://tfs.etsi.org/)
-# Script to patch gRPC message size limits to 16MB before deployment
+# Script to patch gRPC message size limits to 32MB before deployment
 
 set -e
 
-echo "Patching gRPC message size limits to 16MB..."
+echo "Patching gRPC message size limits to 32MB..."
 
 # Check if CONTROLLER_FOLDER is set
 if [ -z "$CONTROLLER_FOLDER" ]; then
@@ -35,7 +35,7 @@ patch_generic_grpc_service() {
     fi
     
     # Check if already patched
-    if grep -q "16 \* 1024 \* 1024" "$GENERIC_GRPC_SERVICE_FILE"; then
+    if grep -q "32 \* 1024 \* 1024" "$GENERIC_GRPC_SERVICE_FILE"; then
         echo "    GenericGrpcService.py already patched"
         return 0
     fi
@@ -47,8 +47,8 @@ patch_generic_grpc_service() {
     sed -i 's/self\.server = grpc\.server(self\.pool) # , interceptors=(tracer_interceptor,))/self.server = grpc.server(\
             self.pool,\
             options=[\
-                ("grpc.max_receive_message_length", 16 * 1024 * 1024),  # 16 MB\
-                ("grpc.max_send_message_length", 16 * 1024 * 1024),  # 16 MB\
+                ("grpc.max_receive_message_length", 32 * 1024 * 1024),  # 32 MB\
+                ("grpc.max_send_message_length", 32 * 1024 * 1024),  # 32 MB\
             ],\
         )  # , interceptors=(tracer_interceptor,))/' "$GENERIC_GRPC_SERVICE_FILE"
     
@@ -65,7 +65,7 @@ patch_context_client() {
     fi
     
     # Check if already patched
-    if grep -q "16 \* 1024 \* 1024" "$CONTEXT_CLIENT_FILE"; then
+    if grep -q "32 \* 1024 \* 1024" "$CONTEXT_CLIENT_FILE"; then
         echo "    ContextClient.py already patched"
         return 0
     fi
@@ -77,8 +77,8 @@ patch_context_client() {
     sed -i 's/self\.channel = grpc\.insecure_channel(self\.endpoint)/self.channel = grpc.insecure_channel(\
             self.endpoint,\
             options=[\
-                ("grpc.max_receive_message_length", 16 * 1024 * 1024),  # 16 MB\
-                ("grpc.max_send_message_length", 16 * 1024 * 1024),  # 16 MB\
+                ("grpc.max_receive_message_length", 32 * 1024 * 1024),  # 32 MB\
+                ("grpc.max_send_message_length", 32 * 1024 * 1024),  # 32 MB\
             ],\
         )/' "$CONTEXT_CLIENT_FILE"
     
