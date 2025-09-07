@@ -75,7 +75,7 @@ function main()
     ibnf = nothing
     for name_graph in domains_name_graph
         ag = name_graph[2]
-        ibnag = MINDF.default_IBNAttributeGraph(ag)
+        ibnag = MINDF.default_IBNAttributeGraph(ag, 10, 10)
         if MINDF.getibnfid(ibnag) == UUID(localid)
             context = get_contexts(localcontrollerurl)["contexts"]
             if isempty(context)

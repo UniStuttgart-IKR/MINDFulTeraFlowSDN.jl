@@ -31,7 +31,7 @@ function loadmultidomaintestibnfs()
     domains_name_graph = first(JLD2.load(TESTDIR*"/data/itz_IowaStatewideFiberMap-itz_Missouri-itz_UsSignal_addedge_24-23,23-15__(1,9)-(2,3),(1,6)-(2,54),(1,1)-(2,21),(1,16)-(3,18),(1,17)-(3,25),(2,27)-(3,11).jld2"))[2]
     
     devicemapfiles = [MINDF.checkfilepath(TESTDIR, "data/device_map_1.jld2"), MINDF.checkfilepath(TESTDIR, "data/device_map_2.jld2"), MINDF.checkfilepath(TESTDIR, "data/device_map_3.jld2")]
-    controllerips = ["10.41.83.209" , "10.41.83.198", "10.41.83.7"]
+    controllerips = ["10.41.83.209" , "10.41.83.198", "10.41.83.13"]
     controllerurls = Vector{String}(undef, length(controllerips))
     for i in eachindex(controllerips)
         controllerurls[i] = string(HTTP.URI(; scheme = "http", host = controllerips[i], port = string(80), path="/tfs-api"))
@@ -127,7 +127,7 @@ function loadmultidomaintestidistributedbnfs()
     publickeys = [MINDF.readb64keys(MINDF.checkfilepath(CONFIGDIR, pkfile)) for pkfile in publickeysfiles]
 
     devicemapfiles = [MINDF.checkfilepath(TESTDIR, "data/device_map_1.jld2"), MINDF.checkfilepath(TESTDIR, "data/device_map_2.jld2"), MINDF.checkfilepath(TESTDIR, "data/device_map_3.jld2")]
-    controllerips = ["10.41.83.209" , "10.41.83.198", "10.41.83.7"]
+    controllerips = ["10.41.83.209" , "10.41.83.198", "10.41.83.13"]
     controllerurls = Vector{String}(undef, length(controllerips))
     for i in eachindex(controllerips)
         controllerurls[i] = string(HTTP.URI(; scheme = "http", host = controllerips[i], port = string(80), path="/tfs-api"))
@@ -214,7 +214,7 @@ function loadpermissionedbnfs()
     publickeys = [MINDF.readb64keys(MINDF.checkfilepath(CONFIGDIR, pkfile)) for pkfile in publickeysfiles]
     
     devicemapfiles = [MINDF.checkfilepath(TESTDIR, "data/device_map_1.jld2"), MINDF.checkfilepath(TESTDIR, "data/device_map_2.jld2"), MINDF.checkfilepath(TESTDIR, "data/device_map_3.jld2")]
-    controllerips = ["10.41.83.209" , "10.41.83.198", "10.41.83.7"]
+    controllerips = ["10.41.83.209" , "10.41.83.198", "10.41.83.13"]
     controllerurls = Vector{String}(undef, length(controllerips))
     for i in eachindex(controllerips)
         controllerurls[i] = string(HTTP.URI(; scheme = "http", host = controllerips[i], port = string(80), path="/tfs-api"))
