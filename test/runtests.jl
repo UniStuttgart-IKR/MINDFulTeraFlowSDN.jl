@@ -1,5 +1,5 @@
-#include("initialize.jl")
-include("initialize_multiple_tfs_2.jl")
+include("initialize.jl")
+# include("initialize_multiple_tfs.jl")
 include("testsuite/utils.jl")
 include("testsuite/physicaltest.jl")
 include("testsuite/basicintenttest.jl")

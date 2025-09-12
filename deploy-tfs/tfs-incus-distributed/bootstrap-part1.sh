@@ -28,6 +28,29 @@ echo "[2/5] Start Docker daemon"
 sudo systemctl restart docker
 
 echo "[3/5] Install MicroK8s"
+# systemctl is-active snapd
+# systemctl is-active snapd.socket
+# sudo snap --version
+
+sleep 10
+
+# systemctl is-active snapd.socket
+# systemctl is-active snapd
+# sudo snap --version
+# sudo snap version
+# echo "Waiting for snapd service to be active..."
+# timeout=60
+# elapsed=0
+# systemctl is-active snapd
+# while ! systemctl is-active --quiet snapd; do
+#     echo "loop"
+#     sleep 2
+#     elapsed=$((elapsed + 2))
+#     if [ $elapsed -ge $timeout ]; then
+#         echo "ERROR: snapd service did not start within $timeout seconds."
+#         exit 1
+#     fi
+# done
 sudo snap install microk8s --classic --channel=1.29/stable
 
 echo "[4/5] Create aliases"
@@ -35,8 +58,8 @@ sudo snap alias microk8s.kubectl kubectl || true
 sudo snap alias microk8s.helm3 helm3 || true
 
 echo "[5/5] Add user to docker and microk8s groups"
-sudo usermod -a -G docker $USER
-sudo usermod -a -G microk8s $USER
+# sudo usermod -a -G docker $USER
+# sudo usermod -a -G microk8s $USER
 mkdir -p $HOME/.kube
 sudo chown -f -R $USER $HOME/.kube
 

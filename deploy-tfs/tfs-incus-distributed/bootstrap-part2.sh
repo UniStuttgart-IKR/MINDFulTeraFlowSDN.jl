@@ -116,7 +116,7 @@ if [ "$REPOS_CLONED" = false ]; then
     echo "[3/4] Clone repositories"
     cd $HOME
     if [ ! -d "controller" ]; then
-        git clone https://labs.etsi.org/rep/tfs/controller.git
+        git clone --branch v5.0.0 --depth 1 https://labs.etsi.org/rep/tfs/controller.git
     fi
 
     if [ ! -d "MINDFulTeraFlowSDN.jl" ]; then

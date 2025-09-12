@@ -18,9 +18,40 @@ else
   USE_SUDO=""
 fi
 
-if ! ${USE_SUDO} incus info >/dev/null 2>&1; then
-  echo "[incus] Initializing incus..."
-  sudo incus init --minimal
+
+if command -v nix &>/dev/null && nix --version &>/dev/null; then
+  ${USE_SUDO} incus admin init --minimal
+else
+  cat > /tmp/incus-preseed.yaml <<EOF
+networks:
+  - name: incusbr0
+    type: bridge
+    config:
+      ipv4.address: 10.0.100.1/24
+      ipv4.nat: "true"
+
+profiles:
+  - name: default
+    devices:
+      eth0:
+        name: eth0
+        network: incusbr0
+        type: nic
+      root:
+        path: /
+        pool: default
+        size: 35GiB
+        type: disk
+
+storage_pools:
+  - name: default
+    driver: btrfs
+    config:
+      source: /var/lib/incus/storage-pools/default
+EOF
+
+  ${USE_SUDO} incus admin init --preseed < /tmp/incus-preseed.yaml
+  
 fi
 
 # Check VM state
@@ -93,9 +124,6 @@ if [[ "$VM_EXISTS" == "false" ]]; then
     -c security.secureboot=false \
     --device root,size=100GiB
 
-  # echo "[incus] Attaching VM to incusbr0 network bridge..."
-  # ${USE_SUDO} incus config device add "${VM_NAME}" eth0 nic network=incusbr0 || true
-
   echo "[incus] Waiting for VM to start..."
   timeout=600
   elapsed=0
@@ -107,29 +135,20 @@ if [[ "$VM_EXISTS" == "false" ]]; then
     elapsed=$((elapsed + 15))
   done
 
-  # ${USE_SUDO} incus restart "${VM_NAME}"
-  # timeout=600
-  # elapsed=0
-  # while [ $elapsed -lt $timeout ]; do
-  #   if ${USE_SUDO} incus exec "${VM_NAME}" -- echo "VM ready" >/dev/null 2>&1; then
-  #     break
-  #   fi
-  #   sleep 15
-  #   elapsed=$((elapsed + 15))
-  # done
-
-  echo "cloud init"
-  ${USE_SUDO} incus exec "${VM_NAME}" -- cloud-init status --wait || true
+  # echo "cloud init"
+  # ${USE_SUDO} incus exec "${VM_NAME}" -- cloud-init status --wait || true
 
   echo "[incus] Setting up VM..."
   ${USE_SUDO} incus exec "${VM_NAME}" -- bash -c '
     useradd -m -s /bin/bash tfsuser
     echo "tfsuser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/99-tfsuser
     chmod 440 /etc/sudoers.d/99-tfsuser
-    apt-get update
+    #apt-get update
     DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io docker-buildx jq git curl snapd openssh-server
     systemctl enable docker ssh
-    systemctl start docker ssh
+    groupadd microk8s
+    usermod -a -G docker tfsuser
+    usermod -a -G microk8s tfsuser
   '
 fi
 
@@ -162,10 +181,10 @@ elif [[ "$PART1_COMPLETE" == "false" ]]; then
   ${USE_SUDO} incus exec "${VM_NAME}" -- bash -c 'chown tfsuser:tfsuser /home/tfsuser/bootstrap-part1.sh && chmod +x /home/tfsuser/bootstrap-part1.sh'
   
   # Run part 1 in background since it will reboot
-  ${USE_SUDO} incus exec "${VM_NAME}" -- sudo -u tfsuser bash -c "/home/tfsuser/bootstrap-part1.sh --devspace=${DEVSPACE_MODE}" &
+  ${USE_SUDO} incus exec "${VM_NAME}" -- sudo -u tfsuser bash -c "/home/tfsuser/bootstrap-part1.sh --devspace=${DEVSPACE_MODE}" 
   
-  echo "[incus] Part 1 started, VM will reboot. Waiting for restart..."
-  sleep 10
+  # echo "[incus] Part 1 started, VM will reboot. Waiting for restart..."
+  # sleep 10
   
   # Wait for VM to go down and come back up
   echo "[incus] Waiting for VM to reboot..."
@@ -216,7 +235,8 @@ if [[ "$PART1_COMPLETE" == "true" && "$DEPLOYMENT_COMPLETE" == "false" ]]; then
 fi
 
 # Get VM IP address
-VM_IP=$(${USE_SUDO} incus list "${VM_NAME}" -c 4 --format csv | grep -v "172.17.0.1" | head -n1 | cut -d' ' -f1)
+echo "[incus] Retrieving VM IP address..."
+VM_IP=$(${USE_SUDO} incus list "${VM_NAME}" -c 4 --format csv | grep -v "172.17.0.1" | grep 'enp5s0' | cut -d' ' -f1)
 echo "[incus] VM IP: $VM_IP"
 
 echo "✅ Setup complete!"
