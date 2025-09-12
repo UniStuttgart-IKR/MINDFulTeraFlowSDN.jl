@@ -1,7 +1,7 @@
 using MINDFulMakie
-using MINDFul
 using GLMakie
-using JLD2, UUIDs
+using MINDFul
+using JLD2, UUIDs, Dates
 using Unitful, UnitfulData
 
 import MINDFul: ReturnCodes
@@ -68,10 +68,13 @@ ibnplot(ibnfs[1]; multidomain=true, intentids = [intentuuid_neigh], shownodelabe
 # MINDF.installintent!(ibnfs[1], intentuuid_neigh; verbose=true)
 
 
+conintent_neigh = MINDF.ConnectivityIntent(MINDF.GlobalNode(UUID(2), 50), MINDF.GlobalNode(UUID(1), 4), u"100.0Gbps")
+intentuuid_neigh = MINDF.addintent!(ibnf2, conintent_neigh, MINDF.NetworkOperator())
+
+MINDF.compileintent!(ibnf2, intentuuid_neigh, MINDF.KShorestPathFirstFitCompilation(5))
 
 
-
-
+MINDF.uncompileintent!(ibnf1, intentuuid_neigh)
 # with border node
 # conintent_bordernode = MINDF.ConnectivityIntent(MINDF.GlobalNode(UUID(1), 4), MINDF.GlobalNode(UUID(3), 25), u"100.0Gbps")
 # intentuuid_bordernode = MINDF.addintent!(ibnfs[1], conintent_bordernode, MINDF.NetworkOperator())
