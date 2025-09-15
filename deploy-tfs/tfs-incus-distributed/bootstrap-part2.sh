@@ -89,7 +89,9 @@ fi
 if [ "$ADDONS_ENABLED" = false ]; then
     echo "[2/4] Enable MicroK8s addons"
     # Enable community first
-    microk8s.enable community || (git config --global --add safe.directory /snap/microk8s/current/addons/community/.git && microk8s.enable community)
+    git config --global --add safe.directory /snap/microk8s/current/addons/community/.git
+
+    microk8s.enable community
 
     # Enable mandatory addons
     microk8s.enable dns
@@ -100,7 +102,45 @@ if [ "$ADDONS_ENABLED" = false ]; then
     # Enable production addons
     microk8s.enable prometheus
     microk8s.enable metrics-server
-    microk8s.enable linkerd
+    #microk8s.enable linkerd
+    echo "Enabling Linkerd (timeout 2m)..."
+    timeout 120 microk8s.enable linkerd || echo "Linkerd enable timed out or failed, continuing..."
+
+    # Restart linkerd-destination pod if stuck initializing
+    # echo "Checking linkerd-destination pod status..."
+    # POD_NAME=$(kubectl get pods -n linkerd | grep linkerd-destination | awk '{print $1}')
+    # if [ -n "$POD_NAME" ]; then
+    #     POD_STATUS=$(kubectl get pod "$POD_NAME" -n linkerd -o jsonpath='{.status.phase}')
+    #     if [ "$POD_STATUS" != "Running" ]; then
+    #         echo "Restarting linkerd-destination pod: $POD_NAME"
+    #         kubectl delete pod "$POD_NAME" -n linkerd
+    #         echo "Waiting for new pod to start..."
+    #         sleep 20
+    #     fi
+    # fi
+
+    echo "Waiting for linkerd-destination pod to be created..."
+    for i in {1..20}; do
+        POD_NAME=$(kubectl get pods -n linkerd | grep linkerd-destination | awk '{print $1}')
+        if [ -n "$POD_NAME" ]; then
+            echo "Found pod: $POD_NAME"
+            break
+        fi
+        sleep 5
+    done
+
+    # If pod exists but is not running, restart it
+    if [ -n "$POD_NAME" ]; then
+        POD_STATUS=$(kubectl get pod "$POD_NAME" -n linkerd -o jsonpath='{.status.phase}')
+        if [ "$POD_STATUS" != "Running" ]; then
+            echo "Restarting linkerd-destination pod: $POD_NAME"
+            kubectl delete pod "$POD_NAME" -n linkerd
+            echo "Waiting for new pod to start..."
+            sleep 20
+        fi
+    else
+        echo "ERROR: linkerd-destination pod not found after waiting."
+    fi
 
     # Create linkerd alias
     sudo snap alias microk8s.linkerd linkerd || true

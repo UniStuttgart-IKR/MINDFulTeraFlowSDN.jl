@@ -45,7 +45,7 @@ profiles:
 
 storage_pools:
   - name: default
-    driver: btrfs
+    driver: dir
     config:
       source: /var/lib/incus/storage-pools/default
 EOF
