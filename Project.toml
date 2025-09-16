@@ -40,4 +40,4 @@ Unitful = "1.24.0"
 UnitfulData = "0.6.4"
 
 [sources]
-MINDFul = { url = "https://github.com/UniStuttgart-IKR/MINDFul.jl"}
+MINDFul = {url = "https://github.com/UniStuttgart-IKR/MINDFul.jl"}

@@ -6,7 +6,7 @@ This guide provides step-by-step instructions for installing and deploying TeraF
 
 Before starting the installation process, please ensure you have the following:
 
-- Ubuntu 20.04 LTS or newer
+- Linux operating system
 - At least 8GB of RAM
 - At least 20GB of free disk space
 - An internet connection
@@ -15,32 +15,46 @@ Before starting the installation process, please ensure you have the following:
 
 ### 1. Initial Setup
 
-Please follow the official TeraFlowSDN deployment guide at https://tfs.etsi.org/documentation/v4.0.0/deployment_guide/ until the section "Prepare a deployment script with the deployment settings" in "1.3. Deploy TeraFlowSDN".
+The deployment is done by creating an incus or LXD virtual machine with TFS inside. 
 
-This includes:
+LXD is only recommended if your host system is native Ubuntu 20.04 or newer. In this case, run `deploy-tfs/tfs-lxd-distributed/tfs-lxd.sh` with sudo permissions.
+
+In the other cases, incus virtual machine must be created. Please follow the official incus installation guide available at https://linuxcontainers.org/incus/docs/main/installing/ for many different Linux systems. Then, it is possible to run `deploy-tfs/tfs-incus-distributed/tfs-incus.sh` with sudo permissions.
+
+
+
+### 2. Custom Deployment
+
+By default, the script will set up all the prerequisites and deploy an empty TFS controller inside a virtual machine called `tfs-vm`. However, it is possible to pass some arguments when running the shell script:
+- Name of the virtual machine: `VM_NAME="vmname"`
+- Load a network configuration: `RUN_JULIA=true` and `CONFIG_PATH="path/to/configX.toml"`
+
+What Gets Created:
+- LXD/incus VM: `tfs-vm`
+- User inside VM: `tfsuser`
+- MicroK8s 1.29 with addons (dns, storage, ingress, registry, metrics, prometheus, linkerd)
+- Repos: `controller`, `MINDFulTeraFlowSDN.jl`
+- TeraFlow services in namespace `tfs`
+- (Optional) Stable admin context + topology
+- (Optional) Device graph loaded via Julia
+
+After completion:
+- Direct access: http://{VM_IP}:80/webui
+- VSCode Server: Forward port {VM_IP}:80 in VSCode, check the auto forward and the access will be at http://localhost:{forwarded-port}/webui
+- Shell access if needed: `lxc exec tfs-vm -- bash`
+
+After loading a network configuration to TFS, it is possible to stop the virtual machine with `incus stop tfs-vm` and start it again with `incus start tfs-vm`. This will clean the TFS database, so it it possible to load new network configurations without uninstalling the VM.
+
+
+
+### 3. Our Script Setup
+
+**Important:** Our deployment process has slight modifications from the official guide at https://tfs.etsi.org/documentation/latest/deployment_guide/. The first steps are the same until the section "Prepare a deployment script with the deployment settings" in "1.3. Deploy TeraFlowSDN". This includes:
 - Installing MicroK8s
 - Setting up prerequisites
 - Cloning the TeraFlowSDN repository
 
-### 2. Custom Deployment Script Setup
-
-**Important:** Our deployment process has slight modifications from the official guide.
-
-1. First, clone the official TeraFlowSDN controller repository into a certain folder:
-   ```bash
-   git clone https://labs.etsi.org/rep/tfs/controller.git
-   ```
-
-2. Take note of the path of this folder where you cloned the repository, as you'll need to reference the `controller` folder in it in our deployment script.
-
-3. In the `my_deploy.sh` script provided in this repository, update the `CONTROLLER_FOLDER` variable to point to your controller folder path:
-   ```bash
-   export CONTROLLER_FOLDER="/home/kshpthk/controller"  # Change this to your actual path
-   ```
-
-#### About the Deployment Script
-
-Our `my_deploy.sh` script as well as the scripts in our `deploy` folder are based on the official example but include some improvements:
+After this point, our `my_deploy.sh` script as well as the scripts in our `deploy` folder are based on the official example but include some improvements:
 
 - Updated service configurations to work with newer versions of some components such as prometheus/observability
 - Modifications to ensure reproducibility
@@ -72,25 +86,26 @@ The script settings are organized in 4 main sections:
 
 Review the script and uncomment any additional components you want to deploy based on your needs. For extended descriptions of all settings, check the scripts in the deploy folder.
 
-### 3. Continue with Deployment
-
-Make sure our customized `my_deploy` script is executable:
-
-```bash
-chmod +x my_deploy.sh
-```
-
-After setting up the deployment script, continue following the official guide from the "Confirm that MicroK8s is running" section in "1.3. Deploy TeraFlowSDN" at https://tfs.etsi.org/documentation/latest/deployment_guide/.
-
 
 
 ## Troubleshooting
 
-If you encounter any issues during deployment:
+If you encounter any issues during virtual machine deployment (equivalent with `lxc` instead of `incus`):
+
+1. Check created VMs and the IP address assigned: `incus list`
+2. List storage pools: `incus storage list`
+3. Check default profile: `incus profile show default`
+4. List available networks: `incus network list`
+5. Force stop: `incus stop tfs-vm --force`
+6. Delete virtual machine (only possible if it is stopped): `incus delete tfs-vm`
+
+
+If you encounter any issues during MicroK8s deployment:
 
 1. Check MicroK8s status: `microk8s status`
 2. View pod status: `microk8s kubectl get pods -A`
 3. Check logs for failing pods: `microk8s kubectl logs <pod-name> -n <namespace>`
+
 
 ## Additional Information
 

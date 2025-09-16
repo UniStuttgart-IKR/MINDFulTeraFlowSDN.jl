@@ -10,11 +10,12 @@ The paths of the files referenced in the configuration file can be absolute or r
 function main()
     verbose = false
     MAINDIR = pwd()
-    if length(ARGS) < 1
-        error("Usage: julia MINDFulTeraFlowSDN.main() <configX.toml>")
+    if length(ARGS) < 2
+        error("Usage: julia MINDFulTeraFlowSDN.main() <path/to/configX.toml> <controller_IP_address>")
     end
 
     configpath = ARGS[1]
+    @show configpath
     finalconfigpath = MINDF.checkfilepath(MAINDIR, configpath)
     CONFIGDIR = dirname(finalconfigpath)
     config = TOML.parsefile(finalconfigpath)
@@ -37,6 +38,10 @@ function main()
     localprivatekeyfile = config["local"]["rsaprivatekey"]
     finallocalprivatekeyfile = MINDF.checkfilepath(CONFIGDIR, localprivatekeyfile)
     localprivatekey = MINDF.readb64keys(finallocalprivatekeyfile)
+    localdevicemapfile = MINDF.checkfilepath(CONFIGDIR, config["local"]["devicemapfile"])
+    localcontrollerip = ARGS[2]
+    @show localcontrollerip
+    localcontrollerurl = string(HTTP.URI(; scheme = "http", host = localcontrollerip, port = string(80), path="/tfs-api"))
 
     neighboursconfig = config["remote"]["neighbours"]
     neighbourips = [n["ip"] for n in neighboursconfig]
@@ -57,22 +62,41 @@ function main()
         push!(hdlr, MINDF.RemoteHTTPHandler(UUID(neighbourids[i]), URIstring, neigbhbourpermissions[i], neighbourpublickeys[i], "", "", ""))
     end
 
-
-    sdncontroller = TeraflowSDN()
-    load_device_map!(MAINDIR*"/test/data/device_map.jld2", sdncontroller)
+    
+    sdncontroller = TeraflowSDN(
+        localcontrollerurl, 
+        Dict{Any,String}(),
+        Dict{Tuple{Int,Symbol},String}(),
+        Dict{NTuple{6,Any},String}(),
+        Dict{String,Bool}()
+    )
 
     ibnfsdict = Dict{Int, MINDF.IBNFramework}()
     ibnf = nothing
     for name_graph in domains_name_graph
         ag = name_graph[2]
-        ibnag = MINDF.default_IBNAttributeGraph(ag)
+        ibnag = MINDF.default_IBNAttributeGraph(ag, 10, 10)
         if MINDF.getibnfid(ibnag) == UUID(localid)
+            context = get_contexts(localcontrollerurl)["contexts"]
+            if isempty(context)
+                setup_context_topology(sdncontroller)
+                create_graph_with_devices(ibnag, sdncontroller)
+            end
+
+            if !isfile(localdevicemapfile)
+                save_device_map(localdevicemapfile, sdncontroller)
+            end
+
+            load_device_map!(localdevicemapfile, sdncontroller)
+
             ibnf = MINDF.IBNFramework(ibnag, hdlr, encryption, neighbourips, sdncontroller, ibnfsdict; verbose)
             break
         end
     end
 
-    return if ibnf === nothing
+    if ibnf === nothing
         error("No matching ibnf found for ibnfid $localid")
+    else
+        return ibnf
     end
 end
