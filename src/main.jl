@@ -6,15 +6,13 @@ It expects the path of the configuration file in TOML format, in order to set up
 and start the HTTP server that enables communication between domains.
 The path can be absolute or relative to the current working directory.
 The paths of the files referenced in the configuration file can be absolute or relative to the directory of the configuration file.
+It also expects the IP address of the TeraFlowSDN controller.
 """
-function main()
+function main(; configfile="test/data/config1.toml", tfs_ip="127.0.0.1")
     verbose = false
     MAINDIR = pwd()
-    if length(ARGS) < 2
-        error("Usage: julia MINDFulTeraFlowSDN.main() <path/to/configX.toml> <controller_IP_address>")
-    end
 
-    configpath = ARGS[1]
+    configpath = configfile
     @show configpath
     finalconfigpath = MINDF.checkfilepath(MAINDIR, configpath)
     CONFIGDIR = dirname(finalconfigpath)
@@ -39,7 +37,7 @@ function main()
     finallocalprivatekeyfile = MINDF.checkfilepath(CONFIGDIR, localprivatekeyfile)
     localprivatekey = MINDF.readb64keys(finallocalprivatekeyfile)
     localdevicemapfile = MINDF.checkfilepath(CONFIGDIR, config["local"]["devicemapfile"])
-    localcontrollerip = ARGS[2]
+    localcontrollerip = tfs_ip
     @show localcontrollerip
     localcontrollerurl = string(HTTP.URI(; scheme = "http", host = localcontrollerip, port = string(80), path="/tfs-api"))
 
