@@ -18,7 +18,7 @@ else
   USE_SUDO=""
 fi
 
-
+# Preseed.yaml in incus requires "driver: btrfs" for storage pool
 if command -v nix &>/dev/null && nix --version &>/dev/null; then
   ${USE_SUDO} incus admin init --minimal
 else
